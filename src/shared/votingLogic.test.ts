@@ -124,3 +124,42 @@ test('computeRecap aggregates teacher matrix, nomination leaders, class particip
   assert.ok(csv.includes('Bpk. Nasan, S.Pd., M.M.'));
   assert.ok(csv.includes('Guru Terberwibawa'));
 });
+
+test('excelExport generates a valid 5-sheet .xlsx workbook and sanitizes filenames', async () => {
+  const XLSX = await import('xlsx');
+  const { buildRecapExcelBuffer, sanitizeExcelFilename } = await import('./excelExport');
+
+  const ballots: StoredBallot[] = [
+    {
+      id: 'b-1',
+      voterName: 'Raka Pratama',
+      normalizedVoterKey: 'raka pratama::82',
+      voterClass: '82',
+      selections: { 't-01': 'n-26', 't-02': 'n-06' },
+      submittedAt: '2026-11-20T08:00:00.000Z',
+    },
+  ];
+  const recap = computeRecap(ballots, '2026-11-20T08:10:00.000Z');
+  const bytes = buildRecapExcelBuffer(recap);
+  assert.ok(bytes.byteLength > 1000);
+
+  const parsed = XLSX.read(bytes, { type: 'array' });
+  assert.deepEqual(parsed.SheetNames, [
+    'Ringkasan',
+    'Matriks Guru x Nominasi',
+    'Pemenang Kategori',
+    'Partisipasi Kelas',
+    'Data Pemilih',
+  ]);
+
+  const matrixSheet = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+    parsed.Sheets['Matriks Guru x Nominasi']
+  );
+  assert.equal(matrixSheet.length, 27);
+  assert.equal(matrixSheet[0]['Nama Guru'], 'Bpk. Nasan, S.Pd., M.M.');
+  assert.equal(matrixSheet[0]['Guru Terberwibawa'], 1);
+
+  assert.equal(sanitizeExcelFilename('Rekap Voting: Kelas/9'), 'Rekap_Voting_Kelas_9.xlsx');
+  assert.equal(sanitizeExcelFilename('laporan.xlsx'), 'laporan.xlsx');
+});
+

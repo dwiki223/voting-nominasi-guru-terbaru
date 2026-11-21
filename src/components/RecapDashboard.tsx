@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Download, RefreshCw, Search, Trophy } from 'lucide-react';
+import { Download, FileSpreadsheet, RefreshCw, Search, Trophy } from 'lucide-react';
 import { NOMINATIONS, type RecapSummary } from '../shared/constants';
+import { buildRecapExcelBlob } from '../shared/excelExport';
 import { generateRecapCsv } from '../shared/votingLogic';
+import { GoogleDriveSyncCard } from './GoogleDriveSyncCard';
 import { SCHOOL_LOGO_URL, type RecapTab } from './Header';
 import { NominationIllustration } from './NominationIllustration';
 import { SafeImage } from './SafeImage';
@@ -61,6 +63,19 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
     const a = document.createElement('a');
     a.href = url;
     a.download = `rekap-nominasi-guru-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadExcel = () => {
+    if (!recap) return;
+    const blob = buildRecapExcelBlob(recap);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rekap-nominasi-guru-${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -143,6 +158,14 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
               </button>
               <button
                 type="button"
+                onClick={handleDownloadExcel}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50/70 px-3.5 py-2 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 whitespace-nowrap shrink-0"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
+                Unduh Excel (.xlsx)
+              </button>
+              <button
+                type="button"
                 onClick={handleDownloadCsv}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0"
               >
@@ -202,6 +225,8 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
           </div>
         </div>
       </section>
+
+      <GoogleDriveSyncCard recap={recap} />
 
       {recap.totalVoters === 0 && (
         <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
