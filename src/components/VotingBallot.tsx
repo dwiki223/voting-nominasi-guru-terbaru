@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { NOMINATIONS, TEACHERS, type SelectionMap } from '../shared/constants';
-import { assignNomination, getNominationAvailability } from '../shared/votingLogic';
+import { assignNomination, getNominationAvailability, validateVoterIdentity } from '../shared/votingLogic';
 import { SCHOOL_LOGO_URL } from './Header';
 import { NominationIllustration } from './NominationIllustration';
 import { SafeImage } from './SafeImage';
@@ -35,6 +35,7 @@ interface VotingBallotProps {
   voterClass: string;
   selections: SelectionMap;
   onChangeSelections: (next: SelectionMap) => void;
+  onConfirmIdentity: () => void;
   onSubmitBallot: () => Promise<{ ok: boolean; error?: string; receipt?: SubmittedReceipt }>;
   onResetForNextVoter: () => void;
   onOpenRecap: () => void;
@@ -45,8 +46,11 @@ type FilterMode = 'all' | 'unassigned' | 'assigned';
 
 export const VotingBallot: React.FC<VotingBallotProps> = ({
   isIdentityLocked,
+  voterName,
+  voterClass,
   selections,
   onChangeSelections,
+  onConfirmIdentity,
   onSubmitBallot,
   onResetForNextVoter,
   onOpenRecap,
@@ -156,11 +160,24 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
     }, 30);
   };
 
+  const identityCheck = useMemo(
+    () => validateVoterIdentity(voterName, voterClass),
+    [voterName, voterClass]
+  );
+  const canReadySubmit = isIdentityLocked && selectedCount > 0;
+
   const handleSubmit = async () => {
     setSubmitError(null);
     if (!isIdentityLocked) {
-      setSubmitError('Lengkapi dan konfirmasi Nama Lengkap serta Kelas Anda di Langkah 1 terlebih dahulu.');
-      return;
+      if (identityCheck.valid && selectedCount > 0) {
+        onConfirmIdentity();
+      } else {
+        setSubmitError(
+          'Lengkapi Nama Lengkap dan Kelas pada Langkah 1 lalu tekan "Buka Surat Suara" terlebih dahulu.'
+        );
+        document.getElementById('voter-name-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
     }
     if (selectedCount === 0) {
       setSubmitError('Pilih minimal 1 nominasi untuk 1 guru sebelum mengirim suara.');
@@ -273,18 +290,29 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 lg:pb-0">
       {!isIdentityLocked && (
         <div
           role="status"
-          className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-3.5 text-sm text-amber-950"
+          className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-3.5 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"
         >
-          <Lock className="h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
-          <span>
-            Daftar pilihan guru masih terkunci. Isi <strong>Nama Lengkap</strong> dan{' '}
-            <strong>Kelas</strong> pada Langkah 1 di atas, lalu tekan{' '}
-            <strong>Buka Surat Suara</strong>.
-          </span>
+          <div className="flex items-center gap-3">
+            <Lock className="h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+            <span>
+              Daftar pilihan guru masih terkunci. Isi <strong>Nama Lengkap</strong> dan{' '}
+              <strong>Kelas</strong> pada Langkah 1 di atas, lalu tekan{' '}
+              <strong>Buka Surat Suara</strong>.
+            </span>
+          </div>
+          {identityCheck.valid && (
+            <button
+              type="button"
+              onClick={onConfirmIdentity}
+              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-amber-700 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-800 whitespace-nowrap"
+            >
+              Konfirmasi &amp; Buka Surat Suara
+            </button>
+          )}
         </div>
       )}
 
@@ -537,14 +565,26 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!isIdentityLocked || selectedCount === 0 || isSubmitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 whitespace-nowrap"
+                disabled={isSubmitting}
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors whitespace-nowrap disabled:cursor-wait disabled:opacity-70 ${
+                  canReadySubmit
+                    ? 'bg-blue-700 text-white hover:bg-blue-800'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
               >
                 <Send className="h-4 w-4" aria-hidden="true" />
                 {isSubmitting
                   ? 'Mengirim Suara...'
                   : `Kirim Suara Voting (${selectedCount}/${TEACHERS.length})`}
               </button>
+
+              {!canReadySubmit && (
+                <p className="text-center text-[11px] text-slate-500">
+                  {!isIdentityLocked
+                    ? 'Konfirmasi Nama & Kelas pada Langkah 1 terlebih dahulu.'
+                    : 'Pilih minimal 1 nominasi guru sebelum mengirim.'}
+                </p>
+              )}
 
               {selectedCount > 0 && (
                 <button
@@ -727,6 +767,36 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
           </div>
         </div>
       )}
+      {/* Sticky Mobile Submit Bar */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm lg:hidden">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-mono tabular-nums text-xs font-semibold text-slate-900">
+              {selectedCount} / {TEACHERS.length} Guru dipilih
+            </div>
+            <div className="truncate text-[11px] text-slate-500">
+              {!isIdentityLocked
+                ? 'Langkah 1 belum dikonfirmasi'
+                : selectedCount === 0
+                  ? 'Pilih minimal 1 guru'
+                  : 'Siap dikirim'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:cursor-wait disabled:opacity-70 ${
+              canReadySubmit
+                ? 'bg-blue-700 text-white hover:bg-blue-800'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+            }`}
+          >
+            <Send className="h-3.5 w-3.5" aria-hidden="true" />
+            {isSubmitting ? 'Mengirim...' : 'Kirim Suara'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

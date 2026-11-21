@@ -88,13 +88,13 @@ var TEACHER_MAP = new Map(TEACHERS.map((t) => [t.id, t]));
 var NOMINATION_MAP = new Map(NOMINATIONS.map((n) => [n.id, n]));
 var VALID_CLASSES = new Set(CLASSES);
 function normalizeVoterName(name) {
-  return name.trim().replace(/\s+/g, " ");
+  return String(name ?? "").trim().replace(/\s+/g, " ");
 }
 function buildVoterKey(name, classCode) {
   return `${normalizeVoterName(name).toLowerCase()}::${classCode.trim()}`;
 }
 function validateVoterIdentity(name, classCode) {
-  const normalizedName = normalizeVoterName(name);
+  const normalizedName = typeof name === "string" ? normalizeVoterName(name) : "";
   if (normalizedName.length < 2) {
     return {
       valid: false,
@@ -107,7 +107,7 @@ function validateVoterIdentity(name, classCode) {
       error: "Nama lengkap maksimal 100 karakter."
     };
   }
-  const trimmedClass = classCode.trim();
+  const trimmedClass = typeof classCode === "string" ? classCode.trim() : "";
   if (!VALID_CLASSES.has(trimmedClass)) {
     return {
       valid: false,
@@ -121,11 +121,14 @@ function validateVoterIdentity(name, classCode) {
   };
 }
 function validateBallot(submission) {
+  if (!submission || typeof submission !== "object") {
+    return { valid: false, error: "Data surat suara tidak valid." };
+  }
   const identity = validateVoterIdentity(submission.voterName, submission.voterClass);
   if (!identity.valid || !identity.normalizedName || !identity.validClass) {
     return { valid: false, error: identity.error ?? "Identitas pemilih tidak valid." };
   }
-  if (!submission.selections || typeof submission.selections !== "object") {
+  if (!submission.selections || typeof submission.selections !== "object" || Array.isArray(submission.selections)) {
     return { valid: false, error: "Pilihan nominasi belum diisi." };
   }
   const cleanSelections = {};

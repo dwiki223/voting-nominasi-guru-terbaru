@@ -130,15 +130,33 @@ export default function App() {
           selections,
         }),
       });
-      const payload = await response.json();
+      const rawText = await response.text();
+      let payload: {
+        ok?: boolean;
+        error?: string;
+        recap?: RecapSummary;
+        ballot?: SubmittedReceipt;
+      } = {};
+      if (rawText) {
+        try {
+          payload = JSON.parse(rawText) as typeof payload;
+        } catch {
+          return {
+            ok: false,
+            error: `Server mengembalikan respons tidak valid (HTTP ${response.status}). Silakan coba lagi.`,
+          };
+        }
+      }
       if (!response.ok || !payload.ok) {
         return {
           ok: false,
-          error: payload.error || 'Gagal mengirimkan suara voting.',
+          error:
+            payload.error ||
+            `Gagal mengirimkan suara voting (HTTP ${response.status}).`,
         };
       }
       if (payload.recap) {
-        setRecap(payload.recap as RecapSummary);
+        setRecap(payload.recap);
       }
       const receipt = payload.ballot as SubmittedReceipt;
       setSubmittedReceipt(receipt);
@@ -277,6 +295,7 @@ export default function App() {
               voterClass={voterClass}
               selections={selections}
               onChangeSelections={setSelections}
+              onConfirmIdentity={() => setIsIdentityLocked(true)}
               onSubmitBallot={handleSubmitBallot}
               onResetForNextVoter={handleResetForNextVoter}
               onOpenRecap={() => handleNavigate('recap', 'matrix')}

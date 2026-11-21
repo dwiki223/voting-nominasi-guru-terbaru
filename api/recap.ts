@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { computeRecap } from '../src/shared/votingLogic';
-import { loadBallotsAsync } from './_store';
+import { computeRecap } from '../src/shared/votingLogic.js';
+import { loadBallotsAsync } from './_store.js';
 
 function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
   res.statusCode = statusCode;
@@ -13,6 +13,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 405, { ok: false, error: 'Method not allowed' });
     return;
   }
-  const ballots = await loadBallotsAsync();
-  sendJson(res, 200, computeRecap(ballots));
+  try {
+    const ballots = await loadBallotsAsync();
+    sendJson(res, 200, computeRecap(ballots));
+  } catch (error) {
+    console.error('Error in /api/recap:', error);
+    sendJson(res, 500, { ok: false, error: 'Gagal memuat rekapitulasi suara.' });
+  }
 }

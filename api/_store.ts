@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { StoredBallot } from '../src/shared/constants';
+import type { StoredBallot } from '../src/shared/constants.js';
 
 const TMP_VOTES_FILE = path.join('/tmp', 'nominasi-guru-votes.json');
 const KV_KEY = 'nominasi_guru:ballots';
@@ -49,16 +49,20 @@ export async function loadBallotsAsync(): Promise<StoredBallot[]> {
 export async function saveBallotsAsync(ballots: StoredBallot[]): Promise<void> {
   const redis = getRedisConfig();
   if (redis) {
-    const res = await fetch(`${redis.url}/set/${encodeURIComponent(KV_KEY)}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${redis.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(JSON.stringify(ballots)),
-    });
-    if (res.ok) {
-      return;
+    try {
+      const res = await fetch(`${redis.url}/set/${encodeURIComponent(KV_KEY)}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${redis.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(JSON.stringify(ballots)),
+      });
+      if (res.ok) {
+        return;
+      }
+    } catch {
+      // Fall back to /tmp storage if Redis request fails
     }
   }
 
