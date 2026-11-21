@@ -25,3 +25,15 @@
 10. **Denial-of-Wallet Oversized String / ID**: Creating `/users/u1/driveLinks/<1500-char-id>` or `fileName` exceeding `160` characters.
 11. **Directory Enumeration (`list` on `/users`)**: Listing `/users` as any signed-in user.
 12. **Cross-User Snapshot Deletion / Update**: Non-owner attempting to update or delete `/users/u1/recapSnapshots/snap1` (immutable audit snapshot — updates blocked).
+
+## 3. Public Ballots Collection (`/ballots/{ballotId}`) Invariants & Attack Payloads
+4. **Public Write-Once Immutable Ballot & Full 28-Teacher Mandate**:
+   - Public voters (`request.auth == null`) may create a ballot document ONLY when `ballotId` matches deterministic ID format (`^[a-zA-Z0-9_\-]+$`), `schemaVersion == 1`, `voterClass` is a valid school class (`71`–`95`), `submittedAt == request.time`, and `selections` is an exact map of all 28 teacher keys (`t-01`..`t-28`) with bounded non-empty nomination strings (`4..8` chars).
+   - `allow update: if false;` guarantees deterministic duplicate submissions (`ballot_{class}_{hash}`) cannot overwrite existing votes.
+   - `allow list: if resource.data.schemaVersion == 1;` enforces query alignment while enabling real-time public and admin recap sync across all devices without an ephemeral backend container.
+   - `allow delete` is restricted strictly to `isAdmin()`.
+- **Blocked Attack Vectors**:
+  13. **Partial / Single-Teacher Ballot Bypass**: Creating `/ballots/b1` with `selections` containing only `1` or `27` teachers (`PERMISSION_DENIED`).
+  14. **Duplicate Ballot Overwrite (`update`)**: Attempting to `update` or overwrite an existing `/ballots/{ballotId}` (`PERMISSION_DENIED`).
+  15. **Non-Admin Ballot Deletion**: Unauthenticated user or `member` user attempting to delete `/ballots/{ballotId}` (`PERMISSION_DENIED`).
+

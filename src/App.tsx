@@ -5,12 +5,24 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { GoogleFirebaseProvider } from '@/src/context/GoogleFirebaseContext';
+import {
+  fetchBallotsFromFirestore,
+  submitBallotToFirestore,
+  subscribeBallots,
+} from '@/src/lib/firestoreStore';
 import { Header, SCHOOL_LOGO_URL, type ActivePage, type RecapTab } from './components/Header';
 import { RecapDashboard } from './components/RecapDashboard';
 import { SafeImage } from './components/SafeImage';
 import { VoterIdentityCard } from './components/VoterIdentityCard';
 import { VotingBallot } from './components/VotingBallot';
-import { NOMINATIONS, TEACHERS, type RecapSummary, type SelectionMap } from './shared/constants';
+import {
+  NOMINATIONS,
+  TEACHERS,
+  type RecapSummary,
+  type SelectionMap,
+  type StoredBallot,
+} from './shared/constants';
+import { computeRecap } from './shared/votingLogic';
 
 const HERO_AWARDS_IMAGE = '/src/assets/images/hero_teacher_awards_1795245596126.jpg';
 
@@ -38,76 +50,39 @@ function AppContent() {
   const [isLoadingRecap, setIsLoadingRecap] = useState(true);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
 
+  const applyBallotsToRecap = useCallback((ballots: StoredBallot[]) => {
+    setRecap(computeRecap(ballots));
+    setIsLoadingRecap(false);
+  }, []);
+
   const fetchRecap = useCallback(async () => {
     try {
-      const response = await fetch('/api/recap');
-      if (!response.ok) return;
-      const data = (await response.json()) as RecapSummary;
-      setRecap(data);
+      const ballots = await fetchBallotsFromFirestore();
+      applyBallotsToRecap(ballots);
+      setIsLiveConnected(true);
     } catch {
-      // SSE or manual refresh can recover
+      setIsLiveConnected(false);
     } finally {
       setIsLoadingRecap(false);
     }
-  }, []);
+  }, [applyBallotsToRecap]);
 
   useEffect(() => {
-    let cancelled = false;
-    let eventSource: EventSource | null = null;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-    const initRealtime = async () => {
-      await fetchRecap();
-      if (cancelled) return;
-
-      let supportsSse = false;
-      try {
-        const healthRes = await fetch('/api/health');
-        if (healthRes.ok) {
-          const health = (await healthRes.json()) as { sse?: boolean };
-          supportsSse = Boolean(health.sse);
-        }
-      } catch {
-        supportsSse = false;
+    const unsubscribe = subscribeBallots(
+      (ballots) => {
+        applyBallotsToRecap(ballots);
+        setIsLiveConnected(true);
+      },
+      () => {
+        setIsLiveConnected(false);
+        setIsLoadingRecap(false);
       }
-
-      if (cancelled) return;
-
-      if (supportsSse) {
-        eventSource = new EventSource('/api/stream');
-        eventSource.onopen = () => {
-          setIsLiveConnected(true);
-        };
-        eventSource.addEventListener('recap', (event) => {
-          try {
-            const data = JSON.parse((event as MessageEvent).data) as RecapSummary;
-            setRecap(data);
-            setIsLoadingRecap(false);
-            setIsLiveConnected(true);
-          } catch {
-            // Ignore malformed frame
-          }
-        });
-        eventSource.onerror = () => {
-          setIsLiveConnected(false);
-        };
-      } else {
-        pollTimer = setInterval(() => {
-          fetchRecap();
-        }, 4000);
-      }
-    };
-
-    initRealtime();
+    );
 
     return () => {
-      cancelled = true;
-      eventSource?.close();
-      if (pollTimer) {
-        clearInterval(pollTimer);
-      }
+      unsubscribe();
     };
-  }, [fetchRecap]);
+  }, [applyBallotsToRecap]);
 
   const handleNavigate = (page: ActivePage, recapTab?: RecapTab) => {
     setActivePage(page);
@@ -132,50 +107,35 @@ function AppContent() {
     receipt?: SubmittedReceipt;
   }> => {
     try {
-      const response = await fetch('/api/votes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          voterName,
-          voterClass,
-          selections,
-        }),
+      const result = await submitBallotToFirestore({
+        voterName,
+        voterClass,
+        selections,
       });
-      const rawText = await response.text();
-      let payload: {
-        ok?: boolean;
-        error?: string;
-        recap?: RecapSummary;
-        ballot?: SubmittedReceipt;
-      } = {};
-      if (rawText) {
-        try {
-          payload = JSON.parse(rawText) as typeof payload;
-        } catch {
-          return {
-            ok: false,
-            error: `Server mengembalikan respons tidak valid (HTTP ${response.status}). Silakan coba lagi.`,
-          };
-        }
-      }
-      if (!response.ok || !payload.ok) {
+      if (!result.ok) {
         return {
           ok: false,
-          error:
-            payload.error ||
-            `Gagal mengirimkan suara voting (HTTP ${response.status}).`,
+          error: result.error,
         };
       }
-      if (payload.recap) {
-        setRecap(payload.recap);
-      }
-      const receipt = payload.ballot as SubmittedReceipt;
+      const receipt: SubmittedReceipt = {
+        id: result.ballot.id,
+        voterName: result.ballot.voterName,
+        voterClass: result.ballot.voterClass,
+        selections: result.ballot.selections,
+        submittedAt: result.ballot.submittedAt,
+      };
       setSubmittedReceipt(receipt);
       return { ok: true, receipt };
-    } catch {
+    } catch (err) {
       return {
         ok: false,
-        error: 'Koneksi ke server terputus. Periksa jaringan Anda lalu coba lagi.',
+        error:
+          err instanceof Error && err.message.startsWith('{')
+            ? 'Gagal menyimpan suara ke database Firestore (periksa izin akses atau koneksi internet Anda).'
+            : err instanceof Error && err.message
+              ? err.message
+              : 'Gagal menyimpan suara ke database. Periksa koneksi jaringan Anda lalu coba lagi.',
       };
     }
   };
@@ -230,7 +190,7 @@ function AppContent() {
                   </div>
 
                   <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base">
-                    Berikan apresiasi terbaik untuk guru favorit Anda. Pilih 1 nominasi unik untuk setiap guru dan pantau rekapitulasi suaranya secara langsung.
+                    Berikan apresiasi terbaik untuk seluruh {TEACHERS.length} guru Anda. Wajib memilih 1 nominasi unik untuk setiap guru dan pantau rekapitulasi suaranya secara langsung.
                   </p>
                 </div>
 

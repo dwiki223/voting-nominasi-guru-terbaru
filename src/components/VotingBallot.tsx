@@ -164,12 +164,14 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
     () => validateVoterIdentity(voterName, voterClass),
     [voterName, voterClass]
   );
-  const canReadySubmit = isIdentityLocked && selectedCount > 0;
+  const isAllTeachersSelected = selectedCount === TEACHERS.length;
+  const remainingTeachersCount = TEACHERS.length - selectedCount;
+  const canReadySubmit = isIdentityLocked && isAllTeachersSelected;
 
   const handleSubmit = async () => {
     setSubmitError(null);
     if (!isIdentityLocked) {
-      if (identityCheck.valid && selectedCount > 0) {
+      if (identityCheck.valid && isAllTeachersSelected) {
         onConfirmIdentity();
       } else {
         setSubmitError(
@@ -179,8 +181,11 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
         return;
       }
     }
-    if (selectedCount === 0) {
-      setSubmitError('Pilih minimal 1 nominasi untuk 1 guru sebelum mengirim suara.');
+    if (!isAllTeachersSelected) {
+      const nextMissing = TEACHERS.find((t) => !selections[t.id]);
+      setSubmitError(
+        `Semua guru (${TEACHERS.length} guru) wajib dipilih nominasinya. Masih ada ${remainingTeachersCount} guru yang belum dipilih${nextMissing ? ` (misalnya: ${nextMissing.name})` : ''}.`
+      );
       return;
     }
     setIsSubmitting(true);
@@ -346,10 +351,10 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="ballot-heading" className="text-base font-bold text-slate-900 sm:text-lg">
-                  Langkah 2: Pilih 1 Nominasi untuk Setiap Guru
+                  Langkah 2: Pilih 1 Nominasi untuk Semua Guru ({TEACHERS.length} Guru)
                 </h2>
                 <p className="mt-0.5 text-sm text-slate-600">
-                  Klik tombol pilih di samping nama guru untuk membuka daftar nominasi bergambar. Nominasi yang sudah dipilih otomatis terkunci bagi guru berikutnya.
+                  Wajib memilih 1 nominasi unik untuk seluruh {TEACHERS.length} guru sebelum mengirim suara. Nominasi yang sudah dipilih otomatis terkunci bagi guru berikutnya.
                 </p>
               </div>
               <div className="text-sm font-mono tabular-nums font-semibold text-blue-800">
@@ -582,7 +587,7 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
                 <p className="text-center text-[11px] text-slate-500">
                   {!isIdentityLocked
                     ? 'Konfirmasi Nama & Kelas pada Langkah 1 terlebih dahulu.'
-                    : 'Pilih minimal 1 nominasi guru sebelum mengirim.'}
+                    : `Masih ada ${remainingTeachersCount} guru yang belum dipilih (wajib ${TEACHERS.length}/${TEACHERS.length} guru).`}
                 </p>
               )}
 
@@ -769,6 +774,14 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
       )}
       {/* Sticky Mobile Submit Bar */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm lg:hidden">
+        {submitError && (
+          <div
+            role="alert"
+            className="mx-auto mb-2 max-w-7xl rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-medium text-red-800"
+          >
+            {submitError}
+          </div>
+        )}
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="font-mono tabular-nums text-xs font-semibold text-slate-900">
@@ -777,9 +790,9 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
             <div className="truncate text-[11px] text-slate-500">
               {!isIdentityLocked
                 ? 'Langkah 1 belum dikonfirmasi'
-                : selectedCount === 0
-                  ? 'Pilih minimal 1 guru'
-                  : 'Siap dikirim'}
+                : !isAllTeachersSelected
+                  ? `Kurang ${remainingTeachersCount} guru lagi (wajib semua ${TEACHERS.length})`
+                  : 'Semua guru terisi · Siap dikirim'}
             </div>
           </div>
           <button

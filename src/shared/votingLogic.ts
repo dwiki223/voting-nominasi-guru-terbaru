@@ -184,10 +184,11 @@ export function validateBallot(
     cleanSelections[teacherId] = nominationId;
   }
 
-  if (Object.keys(cleanSelections).length === 0) {
+  const missingTeachers = TEACHERS.filter((t) => !cleanSelections[t.id]);
+  if (missingTeachers.length > 0) {
     return {
       valid: false,
-      error: 'Pilih minimal 1 nominasi untuk 1 guru sebelum mengirim suara.',
+      error: `Semua guru (${TEACHERS.length} guru) wajib dipilih nominasinya. Masih ada ${missingTeachers.length} guru yang belum dipilih (contoh: ${missingTeachers[0].name}).`,
     };
   }
 

@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -12,13 +13,21 @@ import {
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
-import type { RecapSummary } from '../shared/constants';
+import type {
+  BallotSubmission,
+  ClassCode,
+  RecapSummary,
+  SelectionMap,
+  StoredBallot,
+} from '../shared/constants';
 import {
+  buildValidatedBallotInput,
   buildValidatedDriveLinkInput,
   buildValidatedRecapSnapshotInput,
   buildValidatedUserProfileInput,
   isValidBlueprintId,
 } from '../shared/blueprintValidation';
+import { buildVoterKey, validateBallot } from '../shared/votingLogic';
 import { db, handleFirestoreError, OperationType } from './firebase';
 
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'dwiki223@guru.smp.belajar.id';
@@ -301,3 +310,132 @@ export function subscribeRecapSnapshots(
     }
   );
 }
+
+function mapDocToStoredBallot(id: string, data: Record<string, unknown>): StoredBallot {
+  const rawSelections =
+    data.selections && typeof data.selections === 'object' && !Array.isArray(data.selections)
+      ? (data.selections as Record<string, unknown>)
+      : {};
+  const selections: SelectionMap = {};
+  for (const [k, v] of Object.entries(rawSelections)) {
+    if (typeof v === 'string' && v.length > 0) {
+      selections[k] = v;
+    }
+  }
+
+  return {
+    id,
+    voterName: String(data.voterName ?? ''),
+    normalizedVoterKey: String(data.normalizedVoterKey ?? ''),
+    voterClass: String(data.voterClass ?? '71') as ClassCode,
+    selections,
+    submittedAt: new Date(timestampToMs(data.submittedAt)).toISOString(),
+  };
+}
+
+export async function fetchBallotsFromFirestore(): Promise<StoredBallot[]> {
+  const q = query(collection(db, 'ballots'), where('schemaVersion', '==', 1));
+  try {
+    const snapshot = await getDocs(q);
+    const list = snapshot.docs.map((d) => mapDocToStoredBallot(d.id, d.data()));
+    list.sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+    return list;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'ballots');
+  }
+}
+
+export function subscribeBallots(
+  onData: (ballots: StoredBallot[]) => void,
+  onError: (err: Error) => void
+): Unsubscribe {
+  const q = query(collection(db, 'ballots'), where('schemaVersion', '==', 1));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => mapDocToStoredBallot(d.id, d.data()));
+      list.sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+      onData(list);
+    },
+    (error) => {
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'ballots');
+      } catch (wrapped) {
+        onError(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
+      }
+    }
+  );
+}
+
+export async function submitBallotToFirestore(
+  submission: BallotSubmission
+): Promise<{ ok: true; ballot: StoredBallot } | { ok: false; error: string }> {
+  const validation = validateBallot(submission);
+  if (!validation.valid) {
+    return {
+      ok: false,
+      error: validation.error || 'Data voting tidak valid.',
+    };
+  }
+
+  const normalizedVoterKey = buildVoterKey(validation.normalizedName, validation.validClass);
+  const payload = buildValidatedBallotInput({
+    voterName: validation.normalizedName,
+    normalizedVoterKey,
+    voterClass: validation.validClass,
+    selections: validation.cleanSelections,
+  });
+
+  const ballotPath = `ballots/${payload.id}`;
+  const ballotRef = doc(db, 'ballots', payload.id);
+
+  let existingSnap;
+  try {
+    existingSnap = await getDoc(ballotRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, ballotPath);
+  }
+
+  if (existingSnap.exists()) {
+    return {
+      ok: false,
+      error:
+        'Anda sudah mengirimkan suara untuk identitas nama dan kelas ini. Setiap pemilih hanya dapat memilih satu kali.',
+    };
+  }
+
+  try {
+    await setDoc(ballotRef, {
+      ...payload,
+      submittedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    // Handle race condition where another submission created this deterministic ballotId moments earlier
+    try {
+      const recheckSnap = await getDoc(ballotRef);
+      if (recheckSnap.exists()) {
+        return {
+          ok: false,
+          error:
+            'Anda sudah mengirimkan suara untuk identitas nama dan kelas ini. Setiap pemilih hanya dapat memilih satu kali.',
+        };
+      }
+    } catch {
+      // Ignore secondary check errors and surface original permission/network failure
+    }
+    handleFirestoreError(error, OperationType.CREATE, ballotPath);
+  }
+
+  return {
+    ok: true,
+    ballot: {
+      id: payload.id,
+      voterName: payload.voterName,
+      normalizedVoterKey: payload.normalizedVoterKey,
+      voterClass: validation.validClass,
+      selections: payload.selections,
+      submittedAt: new Date().toISOString(),
+    },
+  };
+}
+

@@ -64,24 +64,47 @@ test('assignNomination enforces 1 nomination per teacher and prevents reuse acro
   assert.equal(r4.ok, true);
 });
 
-test('validateBallot rejects duplicate nominations within a single ballot', () => {
-  const invalid = validateBallot({
-    voterName: 'Siti Aminah',
-    voterClass: '74',
-    selections: {
-      't-01': 'n-10',
-      't-02': 'n-10',
-    },
+test('validateBallot rejects partial ballots and duplicate nominations, and accepts all 28 teachers uniquely assigned', () => {
+  const fullSelections: Record<string, string> = {};
+  TEACHERS.forEach((teacher, idx) => {
+    fullSelections[teacher.id] = NOMINATIONS[idx].id;
   });
-  assert.equal(invalid.valid, false);
 
-  const valid = validateBallot({
+  // Partial ballot (only 1 or 2 teachers) must be rejected
+  const partialBallot = validateBallot({
     voterName: 'Siti Aminah',
     voterClass: '74',
     selections: {
       't-01': 'n-10',
       't-02': 'n-06',
     },
+  });
+  assert.equal(partialBallot.valid, false);
+
+  // Partial ballot (27 of 28 teachers) must be rejected
+  const missingOne = { ...fullSelections };
+  delete missingOne['t-28'];
+  const almostFull = validateBallot({
+    voterName: 'Siti Aminah',
+    voterClass: '74',
+    selections: missingOne,
+  });
+  assert.equal(almostFull.valid, false);
+
+  // Duplicate nominations within a 28-teacher ballot must be rejected
+  const duplicateSelections = { ...fullSelections, 't-02': fullSelections['t-01'] };
+  const invalidDuplicate = validateBallot({
+    voterName: 'Siti Aminah',
+    voterClass: '74',
+    selections: duplicateSelections,
+  });
+  assert.equal(invalidDuplicate.valid, false);
+
+  // All 28 teachers with unique nominations must pass
+  const valid = validateBallot({
+    voterName: 'Siti Aminah',
+    voterClass: '74',
+    selections: fullSelections,
   });
   assert.equal(valid.valid, true);
 });
@@ -170,6 +193,8 @@ test('excelExport generates a valid 5-sheet .xlsx workbook and sanitizes filenam
 test('blueprintValidation enforces ID regex and maxLength bounds matching firebase-blueprint.json', async () => {
   const {
     BLUEPRINT_LIMITS,
+    buildBallotDocumentId,
+    buildValidatedBallotInput,
     buildValidatedDriveLinkInput,
     buildValidatedRecapSnapshotInput,
     isValidBlueprintId,
@@ -178,6 +203,27 @@ test('blueprintValidation enforces ID regex and maxLength bounds matching fireba
   assert.equal(isValidBlueprintId('valid_user-123'), true);
   assert.equal(isValidBlueprintId('bad/id'), false);
   assert.equal(isValidBlueprintId('a'.repeat(BLUEPRINT_LIMITS.ID_MAX + 1)), false);
+
+  const ballotId1 = buildBallotDocumentId('raka pratama::82', '82');
+  const ballotId2 = buildBallotDocumentId('raka pratama::82', '82');
+  const ballotId3 = buildBallotDocumentId('nadia putri::82', '82');
+  assert.equal(ballotId1, ballotId2);
+  assert.notEqual(ballotId1, ballotId3);
+  assert.equal(isValidBlueprintId(ballotId1), true);
+
+  const fullSelections: Record<string, string> = {};
+  TEACHERS.forEach((teacher, idx) => {
+    fullSelections[teacher.id] = NOMINATIONS[idx].id;
+  });
+  const ballotInput = buildValidatedBallotInput({
+    voterName: '  Raka   Pratama ',
+    normalizedVoterKey: 'raka pratama::82',
+    voterClass: '82',
+    selections: fullSelections,
+  });
+  assert.equal(ballotInput.schemaVersion, 1);
+  assert.equal(ballotInput.voterName, 'Raka   Pratama');
+  assert.equal(Object.keys(ballotInput.selections).length, 28);
 
   assert.throws(() =>
     buildValidatedDriveLinkInput({

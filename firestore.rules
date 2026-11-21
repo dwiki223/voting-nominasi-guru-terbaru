@@ -206,5 +206,97 @@ service cloud.firestore {
           parentUserExists(userId);
       }
     }
+
+    function isValidClassCode(cls) {
+      return cls is string &&
+        cls in ['71', '72', '73', '74', '81', '82', '83', '84', '85', '91', '92', '93', '94', '95'];
+    }
+
+    function hasAllTeacherSelections(sel) {
+      return sel is map &&
+        sel.size() == 28 &&
+        sel.keys().hasAll([
+          't-01', 't-02', 't-03', 't-04', 't-05', 't-06', 't-07',
+          't-08', 't-09', 't-10', 't-11', 't-12', 't-13', 't-14',
+          't-15', 't-16', 't-17', 't-18', 't-19', 't-20', 't-21',
+          't-22', 't-23', 't-24', 't-25', 't-26', 't-27', 't-28'
+        ]) &&
+        sel.keys().hasOnly([
+          't-01', 't-02', 't-03', 't-04', 't-05', 't-06', 't-07',
+          't-08', 't-09', 't-10', 't-11', 't-12', 't-13', 't-14',
+          't-15', 't-16', 't-17', 't-18', 't-19', 't-20', 't-21',
+          't-22', 't-23', 't-24', 't-25', 't-26', 't-27', 't-28'
+        ]) &&
+        sel['t-01'] is string && sel['t-01'].size() >= 4 && sel['t-01'].size() <= 8 &&
+        sel['t-02'] is string && sel['t-02'].size() >= 4 && sel['t-02'].size() <= 8 &&
+        sel['t-03'] is string && sel['t-03'].size() >= 4 && sel['t-03'].size() <= 8 &&
+        sel['t-04'] is string && sel['t-04'].size() >= 4 && sel['t-04'].size() <= 8 &&
+        sel['t-05'] is string && sel['t-05'].size() >= 4 && sel['t-05'].size() <= 8 &&
+        sel['t-06'] is string && sel['t-06'].size() >= 4 && sel['t-06'].size() <= 8 &&
+        sel['t-07'] is string && sel['t-07'].size() >= 4 && sel['t-07'].size() <= 8 &&
+        sel['t-08'] is string && sel['t-08'].size() >= 4 && sel['t-08'].size() <= 8 &&
+        sel['t-09'] is string && sel['t-09'].size() >= 4 && sel['t-09'].size() <= 8 &&
+        sel['t-10'] is string && sel['t-10'].size() >= 4 && sel['t-10'].size() <= 8 &&
+        sel['t-11'] is string && sel['t-11'].size() >= 4 && sel['t-11'].size() <= 8 &&
+        sel['t-12'] is string && sel['t-12'].size() >= 4 && sel['t-12'].size() <= 8 &&
+        sel['t-13'] is string && sel['t-13'].size() >= 4 && sel['t-13'].size() <= 8 &&
+        sel['t-14'] is string && sel['t-14'].size() >= 4 && sel['t-14'].size() <= 8 &&
+        sel['t-15'] is string && sel['t-15'].size() >= 4 && sel['t-15'].size() <= 8 &&
+        sel['t-16'] is string && sel['t-16'].size() >= 4 && sel['t-16'].size() <= 8 &&
+        sel['t-17'] is string && sel['t-17'].size() >= 4 && sel['t-17'].size() <= 8 &&
+        sel['t-18'] is string && sel['t-18'].size() >= 4 && sel['t-18'].size() <= 8 &&
+        sel['t-19'] is string && sel['t-19'].size() >= 4 && sel['t-19'].size() <= 8 &&
+        sel['t-20'] is string && sel['t-20'].size() >= 4 && sel['t-20'].size() <= 8 &&
+        sel['t-21'] is string && sel['t-21'].size() >= 4 && sel['t-21'].size() <= 8 &&
+        sel['t-22'] is string && sel['t-22'].size() >= 4 && sel['t-22'].size() <= 8 &&
+        sel['t-23'] is string && sel['t-23'].size() >= 4 && sel['t-23'].size() <= 8 &&
+        sel['t-24'] is string && sel['t-24'].size() >= 4 && sel['t-24'].size() <= 8 &&
+        sel['t-25'] is string && sel['t-25'].size() >= 4 && sel['t-25'].size() <= 8 &&
+        sel['t-26'] is string && sel['t-26'].size() >= 4 && sel['t-26'].size() <= 8 &&
+        sel['t-27'] is string && sel['t-27'].size() >= 4 && sel['t-27'].size() <= 8 &&
+        sel['t-28'] is string && sel['t-28'].size() >= 4 && sel['t-28'].size() <= 8;
+    }
+
+    function isValidBallot(data) {
+      return data.keys().hasAll([
+          'id',
+          'schemaVersion',
+          'voterName',
+          'normalizedVoterKey',
+          'voterClass',
+          'selections',
+          'submittedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'schemaVersion',
+          'voterName',
+          'normalizedVoterKey',
+          'voterClass',
+          'selections',
+          'submittedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.schemaVersion is int && data.schemaVersion == 1 &&
+        data.voterName is string && data.voterName.size() >= 2 && data.voterName.size() <= 100 &&
+        data.normalizedVoterKey is string && data.normalizedVoterKey.size() >= 6 && data.normalizedVoterKey.size() <= 110 &&
+        isValidClassCode(data.voterClass) &&
+        hasAllTeacherSelections(data.selections) &&
+        data.submittedAt is timestamp;
+    }
+
+    // Collection: /ballots/{ballotId} (Public voting submissions & real-time live recap)
+    match /ballots/{ballotId} {
+      allow get: if isValidId(ballotId);
+      allow list: if resource.data.schemaVersion == 1;
+
+      allow create: if isValidId(ballotId) &&
+        isValidBallot(incoming()) &&
+        incoming().id == ballotId &&
+        incoming().submittedAt == request.time;
+
+      allow update: if false;
+      allow delete: if isValidId(ballotId) && isAdmin();
+    }
   }
 }

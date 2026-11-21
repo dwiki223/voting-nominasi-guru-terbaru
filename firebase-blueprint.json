@@ -166,6 +166,59 @@
         "driveFileName",
         "createdAt"
       ]
+    },
+    "Ballot": {
+      "title": "Ballot",
+      "description": "Surat suara pemilih umum yang tersimpan permanen di Firestore untuk rekapitulasi real-time.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik deterministik surat suara per nama dan kelas pemilih.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "description": "Versi skema dokumen surat suara (nilai wajib: 1)."
+        },
+        "voterName": {
+          "type": "string",
+          "description": "Nama lengkap pemilih yang sudah dinormalisasi.",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "normalizedVoterKey": {
+          "type": "string",
+          "description": "Kunci unik gabungan nama (huruf kecil) dan kelas pemilih.",
+          "minLength": 6,
+          "maxLength": 110
+        },
+        "voterClass": {
+          "type": "string",
+          "description": "Kode kelas pemilih (71-95).",
+          "enum": ["71", "72", "73", "74", "81", "82", "83", "84", "85", "91", "92", "93", "94", "95"]
+        },
+        "selections": {
+          "type": "object",
+          "description": "Peta pilihan nominasi unik untuk seluruh 28 guru (teacherId -> nominationId)."
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu server saat surat suara dikirimkan."
+        }
+      },
+      "required": [
+        "id",
+        "schemaVersion",
+        "voterName",
+        "normalizedVoterKey",
+        "voterClass",
+        "selections",
+        "submittedAt"
+      ]
     }
   },
   "firestore": {
@@ -186,6 +239,12 @@
         "$ref": "#/entities/RecapSnapshot"
       },
       "description": "Riwayat arsip snapshot rekapitulasi voting yang tersimpan di Firestore."
+    },
+    "/ballots/{ballotId}": {
+      "schema": {
+        "$ref": "#/entities/Ballot"
+      },
+      "description": "Koleksi surat suara pemilih umum (wajib memilih seluruh 28 guru) yang tersimpan permanen di Firestore."
     }
   }
 }

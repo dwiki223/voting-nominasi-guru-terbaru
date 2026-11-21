@@ -131,3 +131,47 @@ export function buildValidatedRecapSnapshotInput(params: {
     driveFileName,
   };
 }
+
+export function buildBallotDocumentId(normalizedVoterKey: string, voterClass: string): string {
+  // Deterministic dual 32-bit FNV-1a hash so the ID is URL/Firestore-safe (^[a-zA-Z0-9_\-]+$)
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < normalizedVoterKey.length; i++) {
+    const code = normalizedVoterKey.charCodeAt(i);
+    h1 ^= code;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= code + i;
+    h2 = Math.imul(h2, 0x85ebca6b);
+  }
+  const part1 = (h1 >>> 0).toString(36).padStart(7, '0');
+  const part2 = (h2 >>> 0).toString(36).padStart(7, '0');
+  return `ballot_${voterClass}_${part1}_${part2}`;
+}
+
+export function buildValidatedBallotInput(params: {
+  voterName: string;
+  normalizedVoterKey: string;
+  voterClass: string;
+  selections: Record<string, string>;
+}) {
+  const voterName = sanitizeBoundedText(params.voterName, 100);
+  if (voterName.length < 2) {
+    throw new Error('Nama pemilih minimal 2 karakter.');
+  }
+  const normalizedVoterKey = sanitizeBoundedText(params.normalizedVoterKey, 110);
+  if (normalizedVoterKey.length < 6) {
+    throw new Error('Kunci identitas pemilih tidak valid.');
+  }
+  const id = buildBallotDocumentId(normalizedVoterKey, params.voterClass);
+  if (!isValidBlueprintId(id)) {
+    throw new Error('ID dokumen surat suara tidak valid.');
+  }
+  return {
+    id,
+    schemaVersion: 1 as const,
+    voterName,
+    normalizedVoterKey,
+    voterClass: params.voterClass,
+    selections: { ...params.selections },
+  };
+}
