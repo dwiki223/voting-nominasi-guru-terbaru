@@ -14,7 +14,7 @@ import {
 import { useGoogleFirebase, type DriveMutation } from '@/src/context/GoogleFirebaseContext';
 import { FIREBASE_PROJECT_ID } from '@/src/lib/firebase';
 import { isSafeHttpsUrl } from '@/src/lib/googleDrive';
-import type { RecapSummary } from '@/src/shared/constants';
+import { NOMINATIONS, TEACHERS, type RecapSummary } from '@/src/shared/constants';
 import {
   DEFAULT_DRIVE_EXCEL_FILENAME,
   sanitizeExcelFilename,
@@ -533,7 +533,7 @@ export const GoogleDriveSyncCard: React.FC<GoogleDriveSyncCardProps> = ({ recap 
                 Total Suara Nominasi: <strong className="font-mono tabular-nums">{recap.totalSelections}</strong> suara
               </div>
               <div>
-                Isi Workbook: 5 sheet Excel (Ringkasan, Matriks 27×29, Pemenang Kategori, Partisipasi Kelas, Data Pemilih)
+                Isi Workbook: 5 sheet Excel (Ringkasan, Matriks {TEACHERS.length}×{NOMINATIONS.length}, Pemenang Kategori, Partisipasi Kelas, Data Pemilih)
               </div>
             </div>
 

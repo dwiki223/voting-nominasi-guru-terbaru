@@ -11,14 +11,16 @@ import {
   validateVoterIdentity,
 } from './votingLogic';
 
-test('dataset matches exact counts from requirements (14 classes, 27 teachers, 29 nominations)', () => {
+test('dataset matches exact counts from requirements (14 classes, 28 teachers, 30 nominations)', () => {
   assert.equal(CLASSES.length, 14);
-  assert.equal(TEACHERS.length, 27);
-  assert.equal(NOMINATIONS.length, 29);
+  assert.equal(TEACHERS.length, 28);
+  assert.equal(NOMINATIONS.length, 30);
   assert.equal(TEACHERS[0].name, 'Bpk. Nasan, S.Pd., M.M.');
   assert.equal(TEACHERS[26].name, 'Ibu Auviliana (Ika)');
+  assert.equal(TEACHERS[27].name, 'Bpk. Ahmad Zainudin, S.S.');
   assert.equal(NOMINATIONS[0].label, 'Guru Tercantik');
   assert.equal(NOMINATIONS[28].label, 'Guru Terhealthy');
+  assert.equal(NOMINATIONS[29].label, 'Guru Tercanggih');
 });
 
 test('validateVoterIdentity requires valid name and class from 71-95', () => {
@@ -155,9 +157,11 @@ test('excelExport generates a valid 5-sheet .xlsx workbook and sanitizes filenam
   const matrixSheet = XLSX.utils.sheet_to_json<Record<string, unknown>>(
     parsed.Sheets['Matriks Guru x Nominasi']
   );
-  assert.equal(matrixSheet.length, 27);
+  assert.equal(matrixSheet.length, 28);
   assert.equal(matrixSheet[0]['Nama Guru'], 'Bpk. Nasan, S.Pd., M.M.');
   assert.equal(matrixSheet[0]['Guru Terberwibawa'], 1);
+  assert.equal(matrixSheet[27]['Nama Guru'], 'Bpk. Ahmad Zainudin, S.S.');
+  assert.equal(matrixSheet[0]['Guru Tercanggih'], 0);
 
   assert.equal(sanitizeExcelFilename('Rekap Voting: Kelas/9'), 'Rekap_Voting_Kelas_9.xlsx');
   assert.equal(sanitizeExcelFilename('laporan.xlsx'), 'laporan.xlsx');

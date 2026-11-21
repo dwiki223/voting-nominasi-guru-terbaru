@@ -51,7 +51,7 @@ export function buildRecapWorkbook(recap: RecapSummary): XLSX.WorkBook {
   wsSummary['!cols'] = [{ wch: 34 }, { wch: 46 }];
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan');
 
-  // Sheet 2: Matriks Guru x Nominasi (27 x 29)
+  // Sheet 2: Matriks Guru x Nominasi (28 x 30)
   const matrixHeaders: string[] = [
     'No',
     'Nama Guru',
@@ -77,7 +77,7 @@ export function buildRecapWorkbook(recap: RecapSummary): XLSX.WorkBook {
   ];
   XLSX.utils.book_append_sheet(wb, wsMatrix, 'Matriks Guru x Nominasi');
 
-  // Sheet 3: Pemenang per Kategori (29)
+  // Sheet 3: Pemenang per Kategori (30)
   const categoryHeaders = [
     'No',
     'Kategori Nominasi',

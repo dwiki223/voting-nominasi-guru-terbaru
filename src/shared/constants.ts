@@ -57,6 +57,7 @@ export const TEACHERS: readonly Teacher[] = [
   { id: 't-25', order: 25, name: 'Bpk. Rohmat' },
   { id: 't-26', order: 26, name: 'Bpk. Rizky' },
   { id: 't-27', order: 27, name: 'Ibu Auviliana (Ika)' },
+  { id: 't-28', order: 28, name: 'Bpk. Ahmad Zainudin, S.S.' },
 ];
 
 export const NOMINATIONS: readonly Nomination[] = [
@@ -89,6 +90,7 @@ export const NOMINATIONS: readonly Nomination[] = [
   { id: 'n-27', label: 'Guru Teringgris', shortLabel: 'Teringgris' },
   { id: 'n-28', label: 'Guru Tersporty', shortLabel: 'Tersporty' },
   { id: 'n-29', label: 'Guru Terhealthy', shortLabel: 'Terhealthy' },
+  { id: 'n-30', label: 'Guru Tercanggih', shortLabel: 'Tercanggih' },
 ];
 
 export type SelectionMap = Record<string, string>; // teacherId -> nominationId

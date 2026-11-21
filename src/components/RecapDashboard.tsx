@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Download, FileSpreadsheet, RefreshCw, Search, Trophy } from 'lucide-react';
-import { NOMINATIONS, type RecapSummary } from '../shared/constants';
+import { NOMINATIONS, TEACHERS, type RecapSummary } from '../shared/constants';
 import { buildRecapExcelBlob } from '../shared/excelExport';
 import { generateRecapCsv } from '../shared/votingLogic';
 import { GoogleDriveSyncCard } from './GoogleDriveSyncCard';
@@ -274,7 +274,7 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Pemenang per Kategori (29)
+            Pemenang per Kategori ({NOMINATIONS.length})
           </button>
           <button
             type="button"
@@ -287,7 +287,7 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Ringkasan per Guru (27)
+            Ringkasan per Guru ({TEACHERS.length})
           </button>
           <button
             type="button"
@@ -327,7 +327,7 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
               onChange={(e) => setSortMode(e.target.value as SortMode)}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 focus:border-blue-700 focus:outline-none"
             >
-              <option value="order">Urutan Resmi (01–27)</option>
+              <option value="order">Urutan Resmi (01–{String(TEACHERS.length).padStart(2, '0')})</option>
               <option value="votes_desc">Suara Terbanyak</option>
               <option value="name_asc">Nama (A–Z)</option>
             </select>
@@ -345,7 +345,7 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
         )}
       </div>
 
-      {/* TAB 1: Full 27x29 Matrix Table */}
+      {/* TAB 1: Full Teachers x Nominations Matrix Table */}
       {activeTab === 'matrix' && (
         <section
           aria-label="Tabel matriks rekapitulasi guru dan nominasi"
@@ -445,7 +445,7 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
         </section>
       )}
 
-      {/* TAB 2: Category Leaders (29 Nominations) */}
+      {/* TAB 2: Category Leaders */}
       {activeTab === 'nominations' && (
         <section
           aria-label="Tabel pemenang sementara per kategori nominasi"
@@ -506,7 +506,7 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
         </section>
       )}
 
-      {/* TAB 3: Teacher Summary (27 Teachers) */}
+      {/* TAB 3: Teacher Summary */}
       {activeTab === 'teachers' && (
         <section
           aria-label="Tabel ringkasan perolehan suara per guru"
@@ -649,7 +649,7 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
                           {voter.voterClass}
                         </td>
                         <td className="px-5 py-2.5 text-right font-mono tabular-nums text-slate-800">
-                          {voter.selectionCount} / 27
+                          {voter.selectionCount} / {TEACHERS.length}
                         </td>
                         <td className="px-5 py-2.5 text-right font-mono tabular-nums text-xs text-slate-500">
                           {new Intl.DateTimeFormat('id-ID', {

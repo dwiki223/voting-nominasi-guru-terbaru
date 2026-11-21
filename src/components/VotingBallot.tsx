@@ -337,7 +337,7 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
-        {/* Main Column: 27 Teachers Ballot */}
+        {/* Main Column: Teachers Ballot */}
         <section
           aria-labelledby="ballot-heading"
           className="rounded-xl border border-slate-200 bg-white lg:col-span-8"

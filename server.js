@@ -5,7 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { createServer as createViteServer } from "vite";
 
-// src/shared/constants.js
+// src/shared/constants.ts
 var CLASSES = [
   "71",
   "72",
@@ -49,7 +49,8 @@ var TEACHERS = [
   { id: "t-24", order: 24, name: "Bpk. Madi" },
   { id: "t-25", order: 25, name: "Bpk. Rohmat" },
   { id: "t-26", order: 26, name: "Bpk. Rizky" },
-  { id: "t-27", order: 27, name: "Ibu Auviliana (Ika)" }
+  { id: "t-27", order: 27, name: "Ibu Auviliana (Ika)" },
+  { id: "t-28", order: 28, name: "Bpk. Ahmad Zainudin, S.S." }
 ];
 var NOMINATIONS = [
   { id: "n-01", label: "Guru Tercantik", shortLabel: "Tercantik" },
@@ -80,7 +81,8 @@ var NOMINATIONS = [
   { id: "n-26", label: "Guru Terberwibawa", shortLabel: "Terberwibawa" },
   { id: "n-27", label: "Guru Teringgris", shortLabel: "Teringgris" },
   { id: "n-28", label: "Guru Tersporty", shortLabel: "Tersporty" },
-  { id: "n-29", label: "Guru Terhealthy", shortLabel: "Terhealthy" }
+  { id: "n-29", label: "Guru Terhealthy", shortLabel: "Terhealthy" },
+  { id: "n-30", label: "Guru Tercanggih", shortLabel: "Tercanggih" }
 ];
 
 // src/shared/votingLogic.ts

@@ -424,6 +424,28 @@ const ILLUSTRATIONS: Record<string, IllustrationMeta> = {
       </svg>
     ),
   },
+  // n-30: Guru Tercanggih — Sleek microchip processor & digital circuit
+  'n-30': {
+    bg: 'bg-cyan-50',
+    border: 'border-cyan-200',
+    render: () => (
+      <svg viewBox="0 0 48 48" className="h-full w-full" aria-hidden="true">
+        <circle cx="24" cy="24" r="17" fill="#CFFAFE" />
+        <path
+          d="M19 10V14M24 10V14M29 10V14M19 34V38M24 34V38M29 34V38M10 19H14M10 24H14M10 29H14M34 19H38M34 24H38M34 29H38"
+          stroke="#0891B2"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <rect x="14" y="14" width="20" height="20" rx="4" fill="#0F172A" stroke="#0284C7" strokeWidth="2" />
+        <rect x="18.5" y="18.5" width="11" height="11" rx="2" fill="#06B6D4" />
+        <path
+          d="M24 20.5L25 23L27.5 24L25 25L24 27.5L23 25L20.5 24L23 23Z"
+          fill="#FFFFFF"
+        />
+      </svg>
+    ),
+  },
 };
 
 export const NominationIllustration: React.FC<NominationIllustrationProps> = ({

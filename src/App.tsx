@@ -10,7 +10,7 @@ import { RecapDashboard } from './components/RecapDashboard';
 import { SafeImage } from './components/SafeImage';
 import { VoterIdentityCard } from './components/VoterIdentityCard';
 import { VotingBallot } from './components/VotingBallot';
-import type { RecapSummary, SelectionMap } from './shared/constants';
+import { NOMINATIONS, TEACHERS, type RecapSummary, type SelectionMap } from './shared/constants';
 
 const HERO_AWARDS_IMAGE = '/src/assets/images/hero_teacher_awards_1795245596126.jpg';
 
@@ -237,7 +237,7 @@ function AppContent() {
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs text-slate-600">
                   <span>
                     <strong className="font-mono tabular-nums font-semibold text-slate-900">
-                      27
+                      {TEACHERS.length}
                     </strong>{' '}
                     Guru
                   </span>
@@ -246,7 +246,7 @@ function AppContent() {
                   </span>
                   <span>
                     <strong className="font-mono tabular-nums font-semibold text-slate-900">
-                      29
+                      {NOMINATIONS.length}
                     </strong>{' '}
                     Nominasi
                   </span>
