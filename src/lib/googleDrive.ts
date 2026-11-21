@@ -1,6 +1,4 @@
-import { getApp, getApps, initializeApp } from 'firebase/app';
 import {
-  getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
@@ -8,13 +6,10 @@ import {
   type Unsubscribe,
   type User,
 } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
 import { EXCEL_MIME_TYPE } from '../shared/excelExport';
+import { auth } from './firebase';
 
 export const SCOPES = ['https://www.googleapis.com/auth/drive.file'] as const;
-
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
 for (const scope of SCOPES) {

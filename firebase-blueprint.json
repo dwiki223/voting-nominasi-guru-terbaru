@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil pengguna terautentikasi untuk pengelola rekapitulasi voting dan sinkronisasi Google Drive.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID pemilik profil.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "description": "Alamat email Google terverifikasi.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Nama tampilan pengguna.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "description": "Peran pengguna di aplikasi.",
+          "enum": ["member", "admin"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu server saat profil pertama kali dibuat."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu server pembaruan profil terakhir."
+        }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "DriveExcelLink": {
+      "title": "DriveExcelLink",
+      "description": "Referensi file Excel (.xlsx) di Google Drive yang dihubungkan oleh pengguna.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID pemilik file.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "driveFileId": {
+          "type": "string",
+          "description": "ID file Google Drive untuk file Excel.",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Nama file Excel (.xlsx).",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "webViewLink": {
+          "type": "string",
+          "description": "Tautan HTTPS ke file di Google Drive.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "lastTotalVoters": {
+          "type": "integer",
+          "description": "Jumlah pemilih pada sinkronisasi terakhir."
+        },
+        "lastTotalSelections": {
+          "type": "integer",
+          "description": "Total pilihan suara pada sinkronisasi terakhir."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu server saat tautan dibuat."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu server saat file terakhir disinkronkan."
+        }
+      },
+      "required": [
+        "ownerId",
+        "driveFileId",
+        "fileName",
+        "webViewLink",
+        "lastTotalVoters",
+        "lastTotalSelections",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RecapSnapshot": {
+      "title": "RecapSnapshot",
+      "description": "Arsip snapshot rekapitulasi voting yang disimpan ke Firestore saat sinkronisasi.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID pemilik snapshot.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Judul arsip snapshot rekapitulasi.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "totalVoters": {
+          "type": "integer",
+          "description": "Total pemilih saat snapshot dibuat."
+        },
+        "totalSelections": {
+          "type": "integer",
+          "description": "Total pilihan nominasi saat snapshot dibuat."
+        },
+        "activeClassesCount": {
+          "type": "integer",
+          "description": "Jumlah kelas aktif (0-14)."
+        },
+        "topTeacherName": {
+          "type": "string",
+          "description": "Nama guru dengan suara terbanyak saat snapshot.",
+          "minLength": 0,
+          "maxLength": 120
+        },
+        "topTeacherVotes": {
+          "type": "integer",
+          "description": "Jumlah suara guru teratas."
+        },
+        "driveFileName": {
+          "type": "string",
+          "description": "Nama file Excel terkait di Google Drive.",
+          "minLength": 0,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu server saat snapshot disimpan."
+        }
+      },
+      "required": [
+        "ownerId",
+        "title",
+        "totalVoters",
+        "totalSelections",
+        "activeClassesCount",
+        "topTeacherName",
+        "topTeacherVotes",
+        "driveFileName",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Dokumen profil pengguna terautentikasi; berfungsi sebagai induk gerbang Master Gate."
+    },
+    "/users/{userId}/driveLinks/{linkId}": {
+      "schema": {
+        "$ref": "#/entities/DriveExcelLink"
+      },
+      "description": "Daftar file Excel Google Drive yang dihubungkan oleh pengguna."
+    },
+    "/users/{userId}/recapSnapshots/{snapshotId}": {
+      "schema": {
+        "$ref": "#/entities/RecapSnapshot"
+      },
+      "description": "Riwayat arsip snapshot rekapitulasi voting yang tersimpan di Firestore."
+    }
+  }
+}

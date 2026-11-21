@@ -1,0 +1,210 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() &&
+        request.auth.token.email == 'dwiki223@guru.smp.belajar.id';
+    }
+
+    function parentUserExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+    // Validation Blueprints (Synchronized verbatim with firebase-blueprint.json)
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role in ['member', 'admin'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidDriveExcelLink(data) {
+      return data.keys().hasAll([
+          'ownerId',
+          'driveFileId',
+          'fileName',
+          'webViewLink',
+          'lastTotalVoters',
+          'lastTotalSelections',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId',
+          'driveFileId',
+          'fileName',
+          'webViewLink',
+          'lastTotalVoters',
+          'lastTotalSelections',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        isValidId(data.ownerId) &&
+        data.driveFileId is string && data.driveFileId.size() >= 1 && data.driveFileId.size() <= 200 &&
+        data.driveFileId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 160 &&
+        data.webViewLink is string && data.webViewLink.size() <= 500 &&
+        data.lastTotalVoters is int && data.lastTotalVoters >= 0 &&
+        data.lastTotalSelections is int && data.lastTotalSelections >= 0 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidRecapSnapshot(data) {
+      return data.keys().hasAll([
+          'ownerId',
+          'title',
+          'totalVoters',
+          'totalSelections',
+          'activeClassesCount',
+          'topTeacherName',
+          'topTeacherVotes',
+          'driveFileName',
+          'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId',
+          'title',
+          'totalVoters',
+          'totalSelections',
+          'activeClassesCount',
+          'topTeacherName',
+          'topTeacherVotes',
+          'driveFileName',
+          'createdAt'
+        ]) &&
+        isValidId(data.ownerId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.totalVoters is int && data.totalVoters >= 0 &&
+        data.totalSelections is int && data.totalSelections >= 0 &&
+        data.activeClassesCount is int && data.activeClassesCount >= 0 && data.activeClassesCount <= 14 &&
+        data.topTeacherName is string && data.topTeacherName.size() <= 120 &&
+        data.topTeacherVotes is int && data.topTeacherVotes >= 0 &&
+        data.driveFileName is string && data.driveFileName.size() <= 160 &&
+        data.createdAt is timestamp;
+    }
+
+    // Collection: /users/{userId}
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if false;
+
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == request.auth.uid &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (incoming().role == 'member' || (incoming().role == 'admin' && isAdmin()));
+
+      allow update: if isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        (isOwner(userId) || isAdmin()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'role', 'updatedAt'])) ||
+          (isOwner(userId) && incoming().role == existing().role && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt']))
+        );
+
+      allow delete: if false;
+
+      // Subcollection: /users/{userId}/driveLinks/{linkId}
+      match /driveLinks/{linkId} {
+        allow get: if isValidId(userId) && isValidId(linkId) && (isOwner(userId) || isAdmin());
+        allow list: if isVerifiedUser() && resource.data.ownerId == request.auth.uid && request.auth.uid == userId;
+
+        allow create: if isValidId(userId) &&
+          isValidId(linkId) &&
+          isOwner(userId) &&
+          isValidDriveExcelLink(incoming()) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().ownerId == userId &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          parentUserExists(userId);
+
+        allow update: if isValidId(userId) &&
+          isValidId(linkId) &&
+          isValidDriveExcelLink(incoming()) &&
+          (isOwner(userId) || isAdmin()) &&
+          parentUserExists(userId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'driveFileId',
+            'fileName',
+            'webViewLink',
+            'lastTotalVoters',
+            'lastTotalSelections',
+            'updatedAt'
+          ]);
+
+        allow delete: if isValidId(userId) &&
+          isValidId(linkId) &&
+          (isOwner(userId) || isAdmin()) &&
+          parentUserExists(userId);
+      }
+
+      // Subcollection: /users/{userId}/recapSnapshots/{snapshotId}
+      match /recapSnapshots/{snapshotId} {
+        allow get: if isValidId(userId) && isValidId(snapshotId) && (isOwner(userId) || isAdmin());
+        allow list: if isVerifiedUser() && resource.data.ownerId == request.auth.uid && request.auth.uid == userId;
+
+        allow create: if isValidId(userId) &&
+          isValidId(snapshotId) &&
+          isOwner(userId) &&
+          isValidRecapSnapshot(incoming()) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().ownerId == userId &&
+          incoming().createdAt == request.time &&
+          parentUserExists(userId);
+
+        allow update: if false;
+
+        allow delete: if isValidId(userId) &&
+          isValidId(snapshotId) &&
+          (isOwner(userId) || isAdmin()) &&
+          parentUserExists(userId);
+      }
+    }
+  }
+}

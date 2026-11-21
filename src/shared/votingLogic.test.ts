@@ -163,3 +163,39 @@ test('excelExport generates a valid 5-sheet .xlsx workbook and sanitizes filenam
   assert.equal(sanitizeExcelFilename('laporan.xlsx'), 'laporan.xlsx');
 });
 
+test('blueprintValidation enforces ID regex and maxLength bounds matching firebase-blueprint.json', async () => {
+  const {
+    BLUEPRINT_LIMITS,
+    buildValidatedDriveLinkInput,
+    buildValidatedRecapSnapshotInput,
+    isValidBlueprintId,
+  } = await import('./blueprintValidation');
+
+  assert.equal(isValidBlueprintId('valid_user-123'), true);
+  assert.equal(isValidBlueprintId('bad/id'), false);
+  assert.equal(isValidBlueprintId('a'.repeat(BLUEPRINT_LIMITS.ID_MAX + 1)), false);
+
+  assert.throws(() =>
+    buildValidatedDriveLinkInput({
+      ownerId: '../evil',
+      driveFileId: 'abc123',
+      fileName: 'rekap.xlsx',
+      webViewLink: 'https://drive.google.com',
+      lastTotalVoters: 1,
+      lastTotalSelections: 2,
+    })
+  );
+
+  const snap = buildValidatedRecapSnapshotInput({
+    ownerId: 'user-01',
+    title: 'Snapshot Awal',
+    totalVoters: 5,
+    totalSelections: 42,
+    activeClassesCount: 99,
+    topTeacherName: 'Bpk. Nasan, S.Pd., M.M.',
+    topTeacherVotes: 4,
+    driveFileName: 'rekap.xlsx',
+  });
+  assert.equal(snap.activeClassesCount, 14);
+});
+
