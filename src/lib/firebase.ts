@@ -1,13 +1,28 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import appletConfig from '../../firebase-applet-config.json';
 
-export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
-export const FIREBASE_DATABASE_ID = firebaseConfig.firestoreDatabaseId;
+const firebaseApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+
+if (!firebaseApiKey) {
+  console.error('Firebase API key is missing. Set the `apiKey` environment variable.');
+}
+
+const firebaseConfig = {
+  apiKey: firebaseApiKey,
+  authDomain: appletConfig.authDomain,
+  projectId: appletConfig.projectId,
+  storageBucket: appletConfig.storageBucket,
+  messagingSenderId: appletConfig.messagingSenderId,
+  appId: appletConfig.appId,
+};
+
+export const FIREBASE_PROJECT_ID = appletConfig.projectId;
+export const FIREBASE_DATABASE_ID = appletConfig.firestoreDatabaseId;
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, FIREBASE_DATABASE_ID);
 export const auth = getAuth(app);
 
 export enum OperationType {

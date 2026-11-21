@@ -2,10 +2,18 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, loadEnv} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({mode}) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  // The project stores the Firebase web key as `apiKey`, which Vite would not
+  // expose to client code without a VITE_ prefix, so it is injected explicitly.
+  const firebaseApiKey = env.VITE_FIREBASE_API_KEY || env.apiKey || '';
+
   return {
+    define: {
+      'import.meta.env.VITE_FIREBASE_API_KEY': JSON.stringify(firebaseApiKey),
+    },
     plugins: [
       react(),
       tailwindcss(),
