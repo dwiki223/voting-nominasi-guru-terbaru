@@ -34,7 +34,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isVerifiedUser() &&
-        request.auth.token.email == 'dwiki223@guru.smp.belajar.id';
+        request.auth.token.email.lower() == 'dwiki223@guru.smp.belajar.id';
     }
 
     function parentUserExists(userId) {

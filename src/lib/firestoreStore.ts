@@ -55,54 +55,75 @@ function timestampToMs(value: unknown): number {
   return Date.now();
 }
 
+const inFlightProfileEnsures = new Map<string, Promise<void>>();
+
 export async function ensureUserProfile(user: User): Promise<void> {
   if (!user.emailVerified) return;
-  const userPath = `users/${user.uid}`;
-  const userRef = doc(db, 'users', user.uid);
 
-  const expectedRole: 'member' | 'admin' =
-    user.email === BOOTSTRAPPED_ADMIN_EMAIL && user.emailVerified ? 'admin' : 'member';
-
-  let existingSnap;
-  try {
-    existingSnap = await getDoc(userRef);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.GET, userPath);
+  const existingPromise = inFlightProfileEnsures.get(user.uid);
+  if (existingPromise) {
+    return existingPromise;
   }
 
-  const profilePayload = buildValidatedUserProfileInput({
-    uid: user.uid,
-    email: user.email || 'user@example.com',
-    displayName: user.displayName || user.email || 'Pengguna Google',
-    role: expectedRole,
-  });
+  const run = (async () => {
+    const userPath = `users/${user.uid}`;
+    const userRef = doc(db, 'users', user.uid);
 
-  if (!existingSnap.exists()) {
+    const expectedRole: 'member' | 'admin' =
+      user.email?.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL && user.emailVerified
+        ? 'admin'
+        : 'member';
+
+    let existingSnap;
     try {
-      await setDoc(userRef, {
-        ...profilePayload,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      existingSnap = await getDoc(userRef);
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, userPath);
+      handleFirestoreError(error, OperationType.GET, userPath);
     }
-    return;
-  }
 
-  try {
-    const existingData = existingSnap.data();
-    const updatePayload: Record<string, unknown> = {
-      displayName: profilePayload.displayName,
-      email: profilePayload.email,
-      updatedAt: serverTimestamp(),
-    };
-    if (expectedRole === 'admin' && existingData?.role !== 'admin') {
-      updatePayload.role = 'admin';
+    const profilePayload = buildValidatedUserProfileInput({
+      uid: user.uid,
+      email: user.email || 'user@example.com',
+      displayName: user.displayName || user.email || 'Pengguna Google',
+      role: expectedRole,
+    });
+
+    if (!existingSnap.exists()) {
+      try {
+        await setDoc(userRef, {
+          ...profilePayload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, userPath);
+      }
+      return;
     }
-    await updateDoc(userRef, updatePayload);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, userPath);
+
+    try {
+      const existingData = existingSnap.data();
+      const updatePayload: Record<string, unknown> = {
+        displayName: profilePayload.displayName,
+        email: profilePayload.email,
+        updatedAt: serverTimestamp(),
+      };
+      if (expectedRole === 'admin' && existingData?.role !== 'admin') {
+        updatePayload.role = 'admin';
+      }
+      await updateDoc(userRef, updatePayload);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, userPath);
+    }
+  })();
+
+  inFlightProfileEnsures.set(user.uid, run);
+  try {
+    await run;
+  } finally {
+    if (inFlightProfileEnsures.get(user.uid) === run) {
+      inFlightProfileEnsures.delete(user.uid);
+    }
   }
 }
 
