@@ -1,0 +1,6 @@
+{
+  "name": "Nominasi Guru — Sistem Voting & Rekapitulasi Real-Time",
+  "description": "Aplikasi voting nominasi guru sekolah dengan aturan satu nominasi unik per guru dan tabel rekapitulasi real-time otomatis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
