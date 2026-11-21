@@ -5,7 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { createServer as createViteServer } from "vite";
 
-// src/shared/constants.ts
+// src/shared/constants.js
 var CLASSES = [
   "71",
   "72",

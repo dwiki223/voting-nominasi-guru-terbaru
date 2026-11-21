@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { GoogleFirebaseProvider } from '@/src/context/GoogleFirebaseContext';
 import { Header, SCHOOL_LOGO_URL, type ActivePage, type RecapTab } from './components/Header';
 import { RecapDashboard } from './components/RecapDashboard';
 import { SafeImage } from './components/SafeImage';
@@ -21,7 +22,7 @@ interface SubmittedReceipt {
   submittedAt: string;
 }
 
-export default function App() {
+function AppContent() {
   const [activePage, setActivePage] = useState<ActivePage>('vote');
   const [activeRecapTab, setActiveRecapTab] = useState<RecapTab>('matrix');
 
@@ -115,6 +116,16 @@ export default function App() {
     }
   };
 
+  const handleOpenDriveSync = () => {
+    setActivePage('recap');
+    setActiveRecapTab('matrix');
+    setTimeout(() => {
+      document
+        .getElementById('gdrive-excel-sync')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
   const handleSubmitBallot = async (): Promise<{
     ok: boolean;
     error?: string;
@@ -183,6 +194,7 @@ export default function App() {
         activePage={activePage}
         activeRecapTab={activeRecapTab}
         onNavigate={handleNavigate}
+        onOpenDriveSync={handleOpenDriveSync}
       />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
@@ -331,5 +343,13 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <GoogleFirebaseProvider>
+      <AppContent />
+    </GoogleFirebaseProvider>
   );
 }

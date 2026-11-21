@@ -3,6 +3,9 @@ import { getAuth } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
+export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
+export const FIREBASE_DATABASE_ID = firebaseConfig.firestoreDatabaseId;
+
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
@@ -61,15 +64,18 @@ export function handleFirestoreError(
 
 let connectionTested = false;
 
-export async function testConnection(): Promise<void> {
-  if (connectionTested) return;
+export async function testConnection(): Promise<'connected' | 'offline'> {
+  if (connectionTested) return 'connected';
   connectionTested = true;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
+    return 'connected';
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.error('Please check your Firebase configuration.');
+      return 'offline';
     }
+    return 'connected';
   }
 }
 

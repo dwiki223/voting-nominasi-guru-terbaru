@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import type { User } from 'firebase/auth';
+import React, { useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -12,41 +11,18 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
+import { useGoogleFirebase, type DriveMutation } from '@/src/context/GoogleFirebaseContext';
+import { FIREBASE_PROJECT_ID } from '@/src/lib/firebase';
+import { isSafeHttpsUrl } from '@/src/lib/googleDrive';
+import type { RecapSummary } from '@/src/shared/constants';
 import {
-  ensureUserProfile,
-  saveDriveLinkToFirestore,
-  saveRecapSnapshotToFirestore,
-  subscribeDriveLinks,
-  subscribeRecapSnapshots,
-  type FirestoreDriveLinkRecord,
-  type FirestoreRecapSnapshotRecord,
-} from '../lib/firestoreStore';
-import {
-  clearDriveAccessToken,
-  createExcelFileInDrive,
-  DriveAuthExpiredError,
-  initGoogleAuth,
-  isSafeHttpsUrl,
-  listAppExcelFiles,
-  signInWithGoogle,
-  signOutGoogle,
-  updateExcelFileInDrive,
-  type DriveExcelFile,
-} from '../lib/googleDrive';
-import type { RecapSummary } from '../shared/constants';
-import {
-  buildRecapExcelBlob,
   DEFAULT_DRIVE_EXCEL_FILENAME,
   sanitizeExcelFilename,
-} from '../shared/excelExport';
+} from '@/src/shared/excelExport';
 
 interface GoogleDriveSyncCardProps {
   recap: RecapSummary;
 }
-
-type PendingMutation =
-  | { mode: 'create'; fileName: string }
-  | { mode: 'update'; fileId: string; fileName: string };
 
 function formatDriveTime(isoOrMs?: string | number): string {
   if (!isoOrMs) return '-';
@@ -61,173 +37,34 @@ function formatDriveTime(isoOrMs?: string | number): string {
 }
 
 export const GoogleDriveSyncCard: React.FC<GoogleDriveSyncCardProps> = ({ recap }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [needsAuth, setNeedsAuth] = useState(true);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const {
+    user,
+    accessToken,
+    needsDriveAuth,
+    isLoggingIn,
+    firestoreStatus,
+    driveFiles,
+    isLoadingFiles,
+    activeFile,
+    setActiveFile,
+    cloudLinks,
+    cloudSnapshots,
+    isSavingSnapshot,
+    isSavingToDrive,
+    lastSyncedUpdatedAt,
+    setLastSyncedUpdatedAt,
+    statusMessage,
+    errorMessage,
+    setErrorMessage,
+    loginWithGoogle,
+    logoutGoogle,
+    refreshDriveFiles,
+    saveSnapshotToCloud,
+    syncExcelToDrive,
+  } = useGoogleFirebase();
 
-  const [driveFiles, setDriveFiles] = useState<DriveExcelFile[]>([]);
-  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
-  const [activeFile, setActiveFile] = useState<DriveExcelFile | null>(null);
   const [newFileName, setNewFileName] = useState(DEFAULT_DRIVE_EXCEL_FILENAME);
-
-  const [cloudLinks, setCloudLinks] = useState<FirestoreDriveLinkRecord[]>([]);
-  const [cloudSnapshots, setCloudSnapshots] = useState<FirestoreRecapSnapshotRecord[]>([]);
-  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
-
-  const [pendingMutation, setPendingMutation] = useState<PendingMutation | null>(null);
-  const [isSavingToDrive, setIsSavingToDrive] = useState(false);
-  const [lastSyncedUpdatedAt, setLastSyncedUpdatedAt] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const loadFiles = useCallback(async (token: string) => {
-    setIsLoadingFiles(true);
-    setErrorMessage(null);
-    try {
-      const files = await listAppExcelFiles(token);
-      setDriveFiles(files);
-      setActiveFile((prev) => {
-        if (prev && files.some((f) => f.id === prev.id)) {
-          return files.find((f) => f.id === prev.id) ?? prev;
-        }
-        return files[0] ?? null;
-      });
-    } catch (err) {
-      if (err instanceof DriveAuthExpiredError) {
-        setAccessToken(null);
-        setNeedsAuth(true);
-      }
-      setErrorMessage(
-        err instanceof Error ? err.message : 'Gagal memuat daftar file Excel dari Google Drive.'
-      );
-    } finally {
-      setIsLoadingFiles(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = initGoogleAuth(
-      (authedUser, token) => {
-        setUser(authedUser);
-        setAccessToken(token);
-        setNeedsAuth(false);
-        loadFiles(token);
-      },
-      (maybeUser) => {
-        setUser(maybeUser);
-        setAccessToken(null);
-        setNeedsAuth(true);
-      }
-    );
-    return () => unsubscribe();
-  }, [loadFiles]);
-
-  // Attach real-time Firestore listeners only when auth is ready and user is email-verified
-  useEffect(() => {
-    if (!user || !user.emailVerified) {
-      setCloudLinks([]);
-      setCloudSnapshots([]);
-      return;
-    }
-
-    let unsubLinks: (() => void) | null = null;
-    let unsubSnaps: (() => void) | null = null;
-    let cancelled = false;
-
-    const initFirestoreSubscriptions = async () => {
-      try {
-        await ensureUserProfile(user);
-        if (cancelled) return;
-
-        unsubLinks = subscribeDriveLinks(
-          user.uid,
-          (links) => {
-            setCloudLinks(links);
-            if (links[0]) {
-              setActiveFile((prev) =>
-                prev ?? {
-                  id: links[0].driveFileId,
-                  name: links[0].fileName,
-                  webViewLink: links[0].webViewLink,
-                }
-              );
-            }
-          },
-          (err) => {
-            setErrorMessage(err.message);
-          }
-        );
-
-        unsubSnaps = subscribeRecapSnapshots(
-          user.uid,
-          (snaps) => {
-            setCloudSnapshots(snaps);
-          },
-          (err) => {
-            setErrorMessage(err.message);
-          }
-        );
-      } catch (err) {
-        if (!cancelled) {
-          setErrorMessage(
-            err instanceof Error
-              ? err.message
-              : 'Gagal menyambungkan riwayat cloud Firestore.'
-          );
-        }
-      }
-    };
-
-    void initFirestoreSubscriptions();
-
-    return () => {
-      cancelled = true;
-      unsubLinks?.();
-      unsubSnaps?.();
-    };
-  }, [user]);
-
-  const handleGoogleLogin = async () => {
-    setIsLoggingIn(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
-    try {
-      const { user: authedUser, accessToken: token } = await signInWithGoogle();
-      setUser(authedUser);
-      setAccessToken(token);
-      setNeedsAuth(false);
-      await ensureUserProfile(authedUser);
-      await loadFiles(token);
-    } catch (err) {
-      const code = (err as { code?: string })?.code;
-      if (code === 'auth/popup-closed-by-user') {
-        setErrorMessage('Jendela masuk Google ditutup sebelum selesai.');
-      } else {
-        setErrorMessage(
-          err instanceof Error
-            ? err.message
-            : 'Gagal masuk dengan akun Google. Pastikan pop-up browser diizinkan.'
-        );
-      }
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const handleGoogleLogout = async () => {
-    await signOutGoogle();
-    setUser(null);
-    setAccessToken(null);
-    setNeedsAuth(true);
-    setDriveFiles([]);
-    setCloudLinks([]);
-    setCloudSnapshots([]);
-    setActiveFile(null);
-    setLastSyncedUpdatedAt(null);
-    setStatusMessage(null);
-    setErrorMessage(null);
-  };
+  const [pendingMutation, setPendingMutation] = useState<DriveMutation | null>(null);
 
   const handleRequestCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,92 +73,22 @@ export const GoogleDriveSyncCard: React.FC<GoogleDriveSyncCardProps> = ({ recap 
     setPendingMutation({ mode: 'create', fileName: safeName });
   };
 
-  const handleRequestUpdate = (file: DriveExcelFile) => {
+  const handleRequestUpdate = (file: { id: string; name: string }) => {
     setErrorMessage(null);
     setPendingMutation({ mode: 'update', fileId: file.id, fileName: file.name });
   };
 
-  const handleSaveSnapshotOnly = async () => {
-    if (!user) return;
-    setIsSavingSnapshot(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
-    try {
-      await saveRecapSnapshotToFirestore(
-        user,
-        recap,
-        activeFile?.name || DEFAULT_DRIVE_EXCEL_FILENAME
-      );
-      setStatusMessage(
-        `Snapshot rekap (${recap.totalVoters} pemilih) berhasil diarsipkan ke Firebase Firestore.`
-      );
-    } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : 'Gagal menyimpan snapshot ke Firestore.'
-      );
-    } finally {
-      setIsSavingSnapshot(false);
-    }
-  };
-
   const handleConfirmMutation = async () => {
-    if (!pendingMutation || !accessToken || !user) return;
-    setIsSavingToDrive(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
-
-    try {
-      const xlsxBlob = buildRecapExcelBlob(recap);
-      let saved: DriveExcelFile;
-
-      if (pendingMutation.mode === 'create') {
-        saved = await createExcelFileInDrive(accessToken, pendingMutation.fileName, xlsxBlob);
-        setDriveFiles((prev) => [saved, ...prev.filter((f) => f.id !== saved.id)]);
-        setStatusMessage(
-          `File Excel "${saved.name}" berhasil dibuat di Google Drive dan dicatat ke Firebase Firestore.`
-        );
-      } else {
-        saved = await updateExcelFileInDrive(
-          accessToken,
-          pendingMutation.fileId,
-          pendingMutation.fileName,
-          xlsxBlob
-        );
-        setDriveFiles((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
-        setStatusMessage(
-          `File Excel "${saved.name}" di Google Drive berhasil diperbarui (${recap.totalVoters} pemilih) dan dicatat ke Firebase Firestore.`
-        );
-      }
-
-      await saveDriveLinkToFirestore(user, {
-        driveFileId: saved.id,
-        fileName: saved.name,
-        webViewLink: isSafeHttpsUrl(saved.webViewLink) ? saved.webViewLink : '',
-        totalVoters: recap.totalVoters,
-        totalSelections: recap.totalSelections,
-      });
-      await saveRecapSnapshotToFirestore(user, recap, saved.name);
-
-      setActiveFile(saved);
-      setLastSyncedUpdatedAt(recap.updatedAt);
+    if (!pendingMutation) return;
+    const ok = await syncExcelToDrive(recap, pendingMutation);
+    if (ok || !isSavingToDrive) {
       setPendingMutation(null);
-    } catch (err) {
-      if (err instanceof DriveAuthExpiredError) {
-        clearDriveAccessToken();
-        setAccessToken(null);
-        setNeedsAuth(true);
-      }
-      setErrorMessage(
-        err instanceof Error ? err.message : 'Gagal menyimpan file Excel ke Google Drive.'
-      );
-      setPendingMutation(null);
-    } finally {
-      setIsSavingToDrive(false);
     }
   };
 
   const hasUnsyncedChanges =
     Boolean(activeFile) && lastSyncedUpdatedAt !== recap.updatedAt;
+  const isFirebaseAuthenticated = Boolean(user && user.emailVerified);
 
   return (
     <section
@@ -336,15 +103,40 @@ export const GoogleDriveSyncCard: React.FC<GoogleDriveSyncCardProps> = ({ recap 
           </div>
           <div>
             <h2 id="gdrive-sync-heading" className="text-base font-bold text-slate-900">
-              Koneksi Google Drive (Excel .xlsx) &amp; Arsip Firebase
+              Koneksi Google Drive (Excel .xlsx) &amp; Firebase Firestore
             </h2>
             <p className="mt-0.5 text-sm text-slate-600">
-              Simpan dan perbarui rekapitulasi suara voting (5 lembar Excel: Ringkasan, Matriks 27×29, Pemenang Kategori, Partisipasi Kelas, Data Pemilih) ke Google Drive serta catat riwayatnya secara real-time di Firebase Firestore.
+              Masuk dengan akun Google Anda untuk menyimpan file Excel rekapitulasi ke Google Drive sekaligus menyinkronkan tautan dan arsip snapshot ke proyek Firebase{' '}
+              <span className="font-mono text-xs font-semibold text-slate-800">
+                {FIREBASE_PROJECT_ID}
+              </span>
+              .
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+              <span>
+                Firebase Firestore:{' '}
+                <strong className={firestoreStatus === 'offline' ? 'text-red-700' : 'text-emerald-700'}>
+                  {firestoreStatus === 'offline'
+                    ? 'Offline / Periksa Konfigurasi'
+                    : isFirebaseAuthenticated
+                      ? 'Terhubung & Tersinkronisasi'
+                      : 'Siap (Login Google untuk menyambungkan)'}
+                </strong>
+              </span>
+              <span className="text-slate-300" aria-hidden="true">
+                ·
+              </span>
+              <span>
+                Google Drive Excel:{' '}
+                <strong className={!needsDriveAuth && accessToken ? 'text-emerald-700' : 'text-slate-700'}>
+                  {!needsDriveAuth && accessToken ? 'Sesi Drive Aktif' : 'Perlu Login Google Drive'}
+                </strong>
+              </span>
+            </div>
           </div>
         </div>
 
-        {!needsAuth && user && (
+        {user && (
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right text-xs">
               <div className="font-semibold text-slate-900">
@@ -354,7 +146,7 @@ export const GoogleDriveSyncCard: React.FC<GoogleDriveSyncCardProps> = ({ recap 
             </div>
             <button
               type="button"
-              onClick={handleGoogleLogout}
+              onClick={logoutGoogle}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
@@ -397,23 +189,23 @@ export const GoogleDriveSyncCard: React.FC<GoogleDriveSyncCardProps> = ({ recap 
         </div>
       )}
 
-      {needsAuth || !accessToken ? (
+      {(needsDriveAuth || !accessToken) && (
         <div className="mt-5 flex flex-col items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center">
           <div className="text-xs text-slate-600 leading-relaxed">
             {user ? (
               <span>
-                Masuk ulang dengan akun Google (<strong className="text-slate-900">{user.email}</strong>) untuk menyegarkan izin akses Google Drive dan sinkronisasi Firestore Anda.
+                Akun Firebase Anda (<strong className="text-slate-900">{user.email}</strong>) sudah login. Klik tombol di samping untuk mengaktifkan kembali izin akses upload/update Excel ke Google Drive.
               </span>
             ) : (
               <span>
-                Masuk dengan akun Google Anda (misal: akun guru/panitia OSIS) untuk menghubungkan penyimpanan file Excel di Google Drive dan arsip cloud Firebase Firestore.
+                Masuk dengan akun Google Anda untuk menyambungkan penyimpanan Excel di Google Drive dan sinkronisasi data ke Firebase Firestore.
               </span>
             )}
           </div>
 
           <button
             type="button"
-            onClick={handleGoogleLogin}
+            onClick={loginWithGoogle}
             disabled={isLoggingIn}
             className="inline-flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 whitespace-nowrap shrink-0"
           >
@@ -445,202 +237,247 @@ export const GoogleDriveSyncCard: React.FC<GoogleDriveSyncCardProps> = ({ recap 
             <span>{isLoggingIn ? 'Menghubungkan...' : 'Sign in with Google'}</span>
           </button>
         </div>
-      ) : (
-        <div className="mt-5 space-y-5">
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-            {/* Active File / Existing Files */}
-            <div className="space-y-3 lg:col-span-7">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  File Excel Tersambung di Google Drive
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => loadFiles(accessToken)}
-                  disabled={isLoadingFiles}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900 disabled:opacity-50"
-                >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${isLoadingFiles ? 'animate-spin' : ''}`}
-                    aria-hidden="true"
-                  />
-                  Segarkan Daftar
-                </button>
-              </div>
+      )}
 
-              {activeFile ? (
-                <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold text-slate-900">
-                        {activeFile.name}
-                      </div>
-                      <div className="mt-0.5 text-xs text-slate-600">
-                        Terakhir diubah di Drive: {formatDriveTime(activeFile.modifiedTime)}
-                      </div>
-                      <div className="mt-1 text-xs">
-                        {hasUnsyncedChanges ? (
-                          <span className="font-semibold text-amber-800">
-                            Data suara terbaru ({recap.totalVoters} pemilih) siap diperbarui ke file ini.
-                          </span>
-                        ) : (
-                          <span className="font-medium text-emerald-700">
-                            Sudah sinkron dengan data voting terbaru.
-                          </span>
-                        )}
-                      </div>
+      {!needsDriveAuth && accessToken && user && (
+        <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-12">
+          {/* Active File / Existing Files */}
+          <div className="space-y-3 lg:col-span-7">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                File Excel Tersambung di Google Drive
+              </h3>
+              <button
+                type="button"
+                onClick={refreshDriveFiles}
+                disabled={isLoadingFiles}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900 disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${isLoadingFiles ? 'animate-spin' : ''}`}
+                  aria-hidden="true"
+                />
+                Segarkan Daftar
+              </button>
+            </div>
+
+            {activeFile ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-slate-900">
+                      {activeFile.name}
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleRequestUpdate(activeFile)}
-                        disabled={isSavingToDrive}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800 disabled:opacity-50 whitespace-nowrap"
-                      >
-                        <FolderSync className="h-3.5 w-3.5" aria-hidden="true" />
-                        Perbarui Excel di Drive
-                      </button>
-
-                      {isSafeHttpsUrl(activeFile.webViewLink) && (
-                        <a
-                          href={activeFile.webViewLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap"
-                        >
-                          Buka di Drive
-                          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                        </a>
+                    <div className="mt-0.5 text-xs text-slate-600">
+                      Terakhir diubah di Drive: {formatDriveTime(activeFile.modifiedTime)}
+                    </div>
+                    <div className="mt-1 text-xs">
+                      {hasUnsyncedChanges ? (
+                        <span className="font-semibold text-amber-800">
+                          Data suara terbaru ({recap.totalVoters} pemilih) siap diperbarui ke file ini.
+                        </span>
+                      ) : (
+                        <span className="font-medium text-emerald-700">
+                          Sudah sinkron dengan data voting terbaru.
+                        </span>
                       )}
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4 text-xs text-slate-600">
-                  Belum ada file Excel voting di Google Drive Anda untuk aplikasi ini. Buat file Excel baru di sebelah kanan untuk mulai menghubungkan data.
-                </div>
-              )}
 
-              {driveFiles.length > 1 && (
-                <div>
-                  <label
-                    htmlFor="drive-file-select"
-                    className="mb-1 block text-xs font-medium text-slate-600"
-                  >
-                    Pilih file Excel lain dari Google Drive:
-                  </label>
-                  <select
-                    id="drive-file-select"
-                    value={activeFile?.id ?? ''}
-                    onChange={(e) => {
-                      const found = driveFiles.find((f) => f.id === e.target.value) ?? null;
-                      setActiveFile(found);
-                      setLastSyncedUpdatedAt(null);
-                    }}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:border-blue-700 focus:outline-none"
-                  >
-                    {driveFiles.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name} ({formatDriveTime(f.modifiedTime)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleRequestUpdate(activeFile)}
+                      disabled={isSavingToDrive}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      <FolderSync className="h-3.5 w-3.5" aria-hidden="true" />
+                      Perbarui Excel di Drive
+                    </button>
 
-            {/* Create New Excel File in Google Drive */}
-            <form
-              onSubmit={handleRequestCreate}
-              className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4 lg:col-span-5"
-            >
+                    {isSafeHttpsUrl(activeFile.webViewLink) && (
+                      <a
+                        href={activeFile.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap"
+                      >
+                        Buka di Drive
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4 text-xs text-slate-600">
+                Belum ada file Excel voting di Google Drive Anda untuk aplikasi ini. Buat file Excel baru di sebelah kanan untuk mulai menghubungkan data.
+              </div>
+            )}
+
+            {driveFiles.length > 1 && (
               <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Buat File Excel (.xlsx) Baru di Drive
-                </h3>
                 <label
-                  htmlFor="new-drive-excel-name"
-                  className="mt-2.5 block text-xs font-medium text-slate-700"
+                  htmlFor="drive-file-select"
+                  className="mb-1 block text-xs font-medium text-slate-600"
                 >
-                  Nama File Excel
+                  Pilih file Excel lain dari Google Drive:
                 </label>
-                <input
-                  id="new-drive-excel-name"
-                  type="text"
-                  value={newFileName}
-                  onChange={(e) => setNewFileName(e.target.value)}
-                  placeholder={DEFAULT_DRIVE_EXCEL_FILENAME}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-700 focus:outline-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSavingToDrive}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                Buat &amp; Simpan ke Google Drive
-              </button>
-            </form>
-          </div>
-
-          {/* Firestore Real-time Sync Archive */}
-          <div className="border-t border-slate-200 pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                <Database className="h-4 w-4 text-blue-700" aria-hidden="true" />
-                <span>
-                  Riwayat Arsip Cloud (Firebase Firestore) · {cloudLinks.length} tautan Drive ·{' '}
-                  {cloudSnapshots.length} snapshot
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleSaveSnapshotOnly}
-                disabled={isSavingSnapshot}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
-              >
-                <Database className="h-3.5 w-3.5 text-blue-700" aria-hidden="true" />
-                {isSavingSnapshot ? 'Menyimpan...' : 'Simpan Snapshot ke Firestore'}
-              </button>
-            </div>
-
-            {cloudSnapshots.length > 0 && (
-              <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-3.5 py-2 font-semibold">Snapshot</th>
-                      <th className="px-3.5 py-2 font-semibold">File Excel Terkait</th>
-                      <th className="px-3.5 py-2 text-right font-semibold">Pemilih</th>
-                      <th className="px-3.5 py-2 text-right font-semibold">Total Suara</th>
-                      <th className="px-3.5 py-2 text-right font-semibold">Waktu Simpan</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {cloudSnapshots.slice(0, 5).map((snap) => (
-                      <tr key={snap.id} className="hover:bg-slate-50/70">
-                        <td className="px-3.5 py-2 font-medium text-slate-900">{snap.title}</td>
-                        <td className="px-3.5 py-2 text-slate-600">{snap.driveFileName || '-'}</td>
-                        <td className="px-3.5 py-2 text-right font-mono tabular-nums text-slate-800">
-                          {snap.totalVoters}
-                        </td>
-                        <td className="px-3.5 py-2 text-right font-mono tabular-nums text-slate-800">
-                          {snap.totalSelections}
-                        </td>
-                        <td className="px-3.5 py-2 text-right font-mono tabular-nums text-slate-500">
-                          {formatDriveTime(snap.createdAtMs)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <select
+                  id="drive-file-select"
+                  value={activeFile?.id ?? ''}
+                  onChange={(e) => {
+                    const found = driveFiles.find((f) => f.id === e.target.value) ?? null;
+                    setActiveFile(found);
+                    setLastSyncedUpdatedAt(null);
+                  }}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:border-blue-700 focus:outline-none"
+                >
+                  {driveFiles.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({formatDriveTime(f.modifiedTime)})
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
           </div>
+
+          {/* Create New Excel File in Google Drive */}
+          <form
+            onSubmit={handleRequestCreate}
+            className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4 lg:col-span-5"
+          >
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Buat File Excel (.xlsx) Baru di Drive
+              </h3>
+              <label
+                htmlFor="new-drive-excel-name"
+                className="mt-2.5 block text-xs font-medium text-slate-700"
+              >
+                Nama File Excel
+              </label>
+              <input
+                id="new-drive-excel-name"
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder={DEFAULT_DRIVE_EXCEL_FILENAME}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-700 focus:outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSavingToDrive}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Buat &amp; Simpan ke Google Drive
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Firestore Real-time Sync Archive — Always available whenever Firebase Auth is signed in */}
+      {isFirebaseAuthenticated && (
+        <div className="mt-5 border-t border-slate-200 pt-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <Database className="h-4 w-4 text-blue-700" aria-hidden="true" />
+              <span>
+                Riwayat Arsip Cloud (Firebase Firestore) · {cloudLinks.length} tautan Drive ·{' '}
+                {cloudSnapshots.length} snapshot
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => saveSnapshotToCloud(recap)}
+              disabled={isSavingSnapshot}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Database className="h-3.5 w-3.5 text-blue-700" aria-hidden="true" />
+              {isSavingSnapshot ? 'Menyimpan...' : 'Simpan Snapshot ke Firestore'}
+            </button>
+          </div>
+
+          {cloudLinks.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-3.5 py-2 font-semibold">Tautan Excel Tersimpan di Firestore</th>
+                    <th className="px-3.5 py-2 text-right font-semibold">Pemilih</th>
+                    <th className="px-3.5 py-2 text-right font-semibold">Terakhir Sinkron</th>
+                    <th className="px-3.5 py-2 text-right font-semibold">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {cloudLinks.map((link) => (
+                    <tr key={link.id} className="hover:bg-slate-50/70">
+                      <td className="px-3.5 py-2 font-medium text-slate-900">{link.fileName}</td>
+                      <td className="px-3.5 py-2 text-right font-mono tabular-nums text-slate-800">
+                        {link.lastTotalVoters}
+                      </td>
+                      <td className="px-3.5 py-2 text-right font-mono tabular-nums text-slate-500">
+                        {formatDriveTime(link.updatedAtMs)}
+                      </td>
+                      <td className="px-3.5 py-2 text-right">
+                        {isSafeHttpsUrl(link.webViewLink) ? (
+                          <a
+                            href={link.webViewLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:text-blue-900"
+                          >
+                            Buka Drive
+                            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {cloudSnapshots.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-3.5 py-2 font-semibold">Snapshot</th>
+                    <th className="px-3.5 py-2 font-semibold">File Excel Terkait</th>
+                    <th className="px-3.5 py-2 text-right font-semibold">Pemilih</th>
+                    <th className="px-3.5 py-2 text-right font-semibold">Total Suara</th>
+                    <th className="px-3.5 py-2 text-right font-semibold">Waktu Simpan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {cloudSnapshots.slice(0, 5).map((snap) => (
+                    <tr key={snap.id} className="hover:bg-slate-50/70">
+                      <td className="px-3.5 py-2 font-medium text-slate-900">{snap.title}</td>
+                      <td className="px-3.5 py-2 text-slate-600">{snap.driveFileName || '-'}</td>
+                      <td className="px-3.5 py-2 text-right font-mono tabular-nums text-slate-800">
+                        {snap.totalVoters}
+                      </td>
+                      <td className="px-3.5 py-2 text-right font-mono tabular-nums text-slate-800">
+                        {snap.totalSelections}
+                      </td>
+                      <td className="px-3.5 py-2 text-right font-mono tabular-nums text-slate-500">
+                        {formatDriveTime(snap.createdAtMs)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

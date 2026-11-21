@@ -93,6 +93,27 @@ export function clearDriveAccessToken(): void {
   cachedAccessToken = null;
 }
 
+export function formatGoogleAuthError(error: unknown): string {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    return 'Jendela login Google ditutup sebelum proses masuk selesai. Silakan klik tombol masuk lagi.';
+  }
+  if (code === 'auth/popup-blocked') {
+    return 'Pop-up login Google diblokir oleh browser Anda. Izinkan pop-up untuk situs ini lalu coba lagi.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    return `Domain "${host}" belum terdaftar di Firebase Authorized Domains. Tambahkan "${host}" pada Firebase Console > Authentication > Settings > Authorized domains.`;
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return 'Metode login Google belum aktif pada proyek Firebase ini.';
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return 'Gagal masuk dengan akun Google. Pastikan pop-up browser diizinkan lalu coba lagi.';
+}
+
 async function parseDriveResponse<T>(res: Response): Promise<T> {
   if (res.status === 401) {
     cachedAccessToken = null;
