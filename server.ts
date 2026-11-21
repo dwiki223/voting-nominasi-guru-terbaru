@@ -60,7 +60,7 @@ async function startServer(): Promise<void> {
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/api/health', (_req: Request, res: Response) => {
-    res.json({ ok: true, totalVoters: cachedBallots.length });
+    res.json({ ok: true, sse: true, totalVoters: cachedBallots.length });
   });
 
   app.get('/api/recap', (_req: Request, res: Response) => {

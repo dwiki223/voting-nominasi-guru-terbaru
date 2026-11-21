@@ -318,7 +318,7 @@ async function startServer() {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, totalVoters: cachedBallots.length });
+    res.json({ ok: true, sse: true, totalVoters: cachedBallots.length });
   });
   app.get("/api/recap", (_req, res) => {
     res.json(getRecapSnapshot());

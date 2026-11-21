@@ -48,28 +48,60 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetchRecap();
+    let cancelled = false;
+    let eventSource: EventSource | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-    const eventSource = new EventSource('/api/stream');
-    eventSource.onopen = () => {
-      setIsLiveConnected(true);
-    };
-    eventSource.addEventListener('recap', (event) => {
+    const initRealtime = async () => {
+      await fetchRecap();
+      if (cancelled) return;
+
+      let supportsSse = false;
       try {
-        const data = JSON.parse((event as MessageEvent).data) as RecapSummary;
-        setRecap(data);
-        setIsLoadingRecap(false);
-        setIsLiveConnected(true);
+        const healthRes = await fetch('/api/health');
+        if (healthRes.ok) {
+          const health = (await healthRes.json()) as { sse?: boolean };
+          supportsSse = Boolean(health.sse);
+        }
       } catch {
-        // Ignore malformed frame
+        supportsSse = false;
       }
-    });
-    eventSource.onerror = () => {
-      setIsLiveConnected(false);
+
+      if (cancelled) return;
+
+      if (supportsSse) {
+        eventSource = new EventSource('/api/stream');
+        eventSource.onopen = () => {
+          setIsLiveConnected(true);
+        };
+        eventSource.addEventListener('recap', (event) => {
+          try {
+            const data = JSON.parse((event as MessageEvent).data) as RecapSummary;
+            setRecap(data);
+            setIsLoadingRecap(false);
+            setIsLiveConnected(true);
+          } catch {
+            // Ignore malformed frame
+          }
+        });
+        eventSource.onerror = () => {
+          setIsLiveConnected(false);
+        };
+      } else {
+        pollTimer = setInterval(() => {
+          fetchRecap();
+        }, 4000);
+      }
     };
+
+    initRealtime();
 
     return () => {
-      eventSource.close();
+      cancelled = true;
+      eventSource?.close();
+      if (pollTimer) {
+        clearInterval(pollTimer);
+      }
     };
   }, [fetchRecap]);
 
