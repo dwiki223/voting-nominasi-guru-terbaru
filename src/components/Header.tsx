@@ -1,7 +1,11 @@
 import React from 'react';
+import { SafeImage } from './SafeImage';
 
 export type ActivePage = 'vote' | 'recap';
 export type RecapTab = 'matrix' | 'nominations' | 'teachers' | 'classes';
+
+export const SCHOOL_LOGO_URL =
+  '/assets/aistudio/WhatsApp_Image_2026-10-11_at_11.55.22_677dcaaf.jpeg';
 
 interface HeaderProps {
   activePage: ActivePage;
@@ -21,14 +25,19 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:gap-8">
-        {/* Zone 1: Single-line Wordmark */}
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:gap-8">
+        {/* Zone 1: Single-line Wordmark + Official Logo */}
         <button
           type="button"
           onClick={() => onNavigate('vote')}
-          className="text-left text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
+          className="inline-flex items-center gap-2.5 text-left text-base sm:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
         >
-          Nominasi Guru
+          <SafeImage
+            src={SCHOOL_LOGO_URL}
+            alt="Logo OSIS SMPIT Insan Madani 8"
+            className="h-10 w-10 rounded-full border border-slate-200 bg-white object-contain p-0.5 shrink-0"
+          />
+          <span>Nominasi Guru</span>
         </button>
 
         {/* Zone 2: Clean text navigation links */}

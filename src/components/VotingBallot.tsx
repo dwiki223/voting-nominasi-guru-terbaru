@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   ArrowRight,
+  Award,
   Check,
   CheckCircle2,
+  ChevronDown,
   Lock,
   RotateCcw,
   Search,
@@ -12,6 +14,12 @@ import {
 } from 'lucide-react';
 import { NOMINATIONS, TEACHERS, type SelectionMap } from '../shared/constants';
 import { assignNomination, getNominationAvailability } from '../shared/votingLogic';
+import { SCHOOL_LOGO_URL } from './Header';
+import { NominationIllustration } from './NominationIllustration';
+import { SafeImage } from './SafeImage';
+
+const BALLOT_GUIDE_IMAGE = '/src/assets/images/illustration_ballot_guide_1795245596415.jpg';
+const RECAP_TROPHY_IMAGE = '/src/assets/images/illustration_recap_trophy_1795245596491.jpg';
 
 interface SubmittedReceipt {
   id: string;
@@ -50,11 +58,26 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Illustrated Nomination Picker modal state
+  const [pickerTeacherId, setPickerTeacherId] = useState<string | null>(null);
+  const [pickerSearch, setPickerSearch] = useState('');
+
   const selectedCount = Object.keys(selections).length;
   const remainingNominationCount = NOMINATIONS.length - selectedCount;
 
   const teacherById = useMemo(() => new Map(TEACHERS.map((t) => [t.id, t])), []);
   const nominationById = useMemo(() => new Map(NOMINATIONS.map((n) => [n.id, n])), []);
+
+  useEffect(() => {
+    if (!pickerTeacherId) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPickerTeacherId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pickerTeacherId]);
 
   // Inverse map: nominationId -> teacherId
   const nominationOwnerMap = useMemo(() => {
@@ -76,6 +99,20 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
     });
   }, [searchQuery, filterMode, selections]);
 
+  const activePickerTeacher = pickerTeacherId ? teacherById.get(pickerTeacherId) ?? null : null;
+
+  const pickerAvailability = useMemo(() => {
+    if (!pickerTeacherId) return [];
+    const list = getNominationAvailability(selections, pickerTeacherId);
+    const q = pickerSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (item) =>
+        item.nomination.label.toLowerCase().includes(q) ||
+        item.nomination.shortLabel.toLowerCase().includes(q)
+    );
+  }, [pickerTeacherId, pickerSearch, selections]);
+
   const handleSelectChange = (teacherId: string, nominationId: string) => {
     setSubmitError(null);
     const result = assignNomination(selections, teacherId, nominationId || null);
@@ -85,6 +122,18 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
     }
     setInlineNotice(null);
     onChangeSelections(result.next);
+  };
+
+  const handleOpenPicker = (teacherId: string) => {
+    if (!isIdentityLocked) return;
+    setPickerSearch('');
+    setPickerTeacherId(teacherId);
+  };
+
+  const handlePickNomination = (nominationId: string) => {
+    if (!pickerTeacherId) return;
+    handleSelectChange(pickerTeacherId, nominationId);
+    setPickerTeacherId(null);
   };
 
   const handleClearAll = () => {
@@ -140,13 +189,20 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
         className="rounded-xl border border-emerald-200 bg-white p-6 sm:p-8"
       >
         <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-slate-100 pb-6">
-            <div className="flex items-start gap-3.5">
-              <CheckCircle2 className="mt-0.5 h-7 w-7 shrink-0 text-emerald-700" aria-hidden="true" />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-6">
+            <div className="flex items-start gap-4">
+              <SafeImage
+                src={RECAP_TROPHY_IMAGE}
+                alt="Ilustrasi Penghargaan Nominasi Guru"
+                className="hidden sm:block h-16 w-20 shrink-0 rounded-xl border border-slate-200 object-cover"
+              />
               <div>
-                <h2 id="receipt-heading" className="text-xl font-bold text-slate-900 sm:text-2xl">
-                  Suara Voting Berhasil Dikirim
-                </h2>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
+                  <h2 id="receipt-heading" className="text-xl font-bold text-slate-900 sm:text-2xl">
+                    Suara Voting Berhasil Dikirim
+                  </h2>
+                </div>
                 <p className="mt-1 text-sm text-slate-600">
                   Terima kasih, <strong className="text-slate-900">{submittedReceipt.voterName}</strong>{' '}
                   <span className="text-slate-300" aria-hidden="true">·</span>{' '}
@@ -200,7 +256,10 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
                         {entry.teacher!.name}
                       </td>
                       <td className="px-4 py-2.5 font-semibold text-blue-800">
-                        {entry.nomination!.label}
+                        <div className="flex items-center gap-2.5">
+                          <NominationIllustration nominationId={entry.nomination!.id} size="sm" />
+                          <span>{entry.nomination!.label}</span>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -262,7 +321,7 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
                   Langkah 2: Pilih 1 Nominasi untuk Setiap Guru
                 </h2>
                 <p className="mt-0.5 text-sm text-slate-600">
-                  Nominasi yang sudah dipilih untuk seorang guru otomatis terkunci bagi guru berikutnya.
+                  Klik tombol pilih di samping nama guru untuk membuka daftar nominasi bergambar. Nominasi yang sudah dipilih otomatis terkunci bagi guru berikutnya.
                 </p>
               </div>
               <div className="text-sm font-mono tabular-nums font-semibold text-blue-800">
@@ -337,7 +396,7 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
             ) : (
               filteredTeachers.map((teacher) => {
                 const currentNomId = selections[teacher.id] ?? '';
-                const availability = getNominationAvailability(selections, teacher.id);
+                const selectedNom = currentNomId ? nominationById.get(currentNomId) : undefined;
 
                 return (
                   <div
@@ -350,40 +409,36 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
                       <span className="font-mono tabular-nums text-xs font-medium text-slate-400 shrink-0">
                         {String(teacher.order).padStart(2, '0')}
                       </span>
-                      <label
-                        htmlFor={`select-${teacher.id}`}
-                        className="text-sm font-semibold text-slate-900 sm:text-[15px]"
-                      >
+                      <span className="text-sm font-semibold text-slate-900 sm:text-[15px]">
                         {teacher.name}
-                      </label>
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2 sm:w-80 shrink-0">
-                      <select
+                      <button
+                        type="button"
                         id={`select-${teacher.id}`}
                         aria-label={`Pilih nominasi untuk ${teacher.name}`}
                         disabled={!isIdentityLocked}
-                        value={currentNomId}
-                        onChange={(e) => handleSelectChange(teacher.id, e.target.value)}
-                        className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-700/15 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${
-                          currentNomId
-                            ? 'border-blue-300 bg-white font-semibold text-blue-900'
-                            : 'border-slate-300 bg-white text-slate-700'
+                        onClick={() => handleOpenPicker(teacher.id)}
+                        className={`flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-1.5 text-left text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-700/15 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${
+                          selectedNom
+                            ? 'border-blue-300 bg-white font-semibold text-blue-900 hover:border-blue-500'
+                            : 'border-slate-300 bg-white text-slate-600 hover:border-blue-500 hover:text-slate-900'
                         }`}
                       >
-                        <option value="">-- Pilih Nominasi --</option>
-                        {availability.map(({ nomination, isAvailable, assignedToTeacherName }) => (
-                          <option
-                            key={nomination.id}
-                            value={nomination.id}
-                            disabled={!isAvailable}
-                          >
-                            {isAvailable
-                              ? nomination.label
-                              : `${nomination.label} (Sudah dipilih: ${assignedToTeacherName})`}
-                          </option>
-                        ))}
-                      </select>
+                        {selectedNom ? (
+                          <NominationIllustration nominationId={selectedNom.id} size="sm" />
+                        ) : (
+                          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-slate-400">
+                            <Award className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1 truncate">
+                          {selectedNom ? selectedNom.label : '-- Pilih Nominasi --'}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                      </button>
 
                       {currentNomId && isIdentityLocked && (
                         <button
@@ -391,7 +446,7 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
                           onClick={() => handleSelectChange(teacher.id, '')}
                           aria-label={`Hapus pilihan nominasi untuk ${teacher.name}`}
                           title="Batalkan pilihan guru ini"
-                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -404,8 +459,31 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
           </div>
         </section>
 
-        {/* Right Sidebar: Live Availability & Submit Controls */}
+        {/* Right Sidebar: Visual Guide, Live Availability & Submit Controls */}
         <aside className="space-y-5 lg:sticky lg:top-20 lg:col-span-4">
+          {/* Illustrated Voting Guide Card */}
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="aspect-[4/3] w-full overflow-hidden border-b border-slate-100 bg-slate-50">
+              <SafeImage
+                src={BALLOT_GUIDE_IMAGE}
+                alt="Ilustrasi Panduan Pengisian Surat Suara Nominasi Guru"
+                fallbackLabel="Panduan Voting"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="flex items-center gap-3.5 px-5 py-4">
+              <SafeImage
+                src={SCHOOL_LOGO_URL}
+                alt="Logo OSIS SMPIT Insan Madani 8"
+                className="h-12 w-12 shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1"
+              />
+              <div className="text-xs text-slate-600 leading-snug">
+                <div className="font-semibold text-slate-900">Panduan Singkat Voting</div>
+                <div>Isi identitas, pilih 1 nominasi bergambar unik per guru, lalu kirim.</div>
+              </div>
+            </div>
+          </div>
+
           {/* Progress & Submit Card */}
           <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
             <div className="flex items-baseline justify-between">
@@ -500,15 +578,12 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
                     key={nom.id}
                     className="flex items-center justify-between gap-3 py-2 text-xs"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {ownerTeacher ? (
-                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden="true" />
-                      ) : (
-                        <span
-                          className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300 ml-1 mr-1"
-                          aria-hidden="true"
-                        />
-                      )}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <NominationIllustration
+                        nominationId={nom.id}
+                        size="sm"
+                        className={ownerTeacher ? 'opacity-50 grayscale-[35%]' : ''}
+                      />
                       <span
                         className={`truncate ${
                           ownerTeacher ? 'text-slate-400 line-through' : 'font-medium text-slate-800'
@@ -518,7 +593,7 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
                       </span>
                     </div>
 
-                    <span className="shrink-0 truncate max-w-[140px] text-right text-slate-500">
+                    <span className="shrink-0 truncate max-w-[130px] text-right text-slate-500">
                       {ownerTeacher ? ownerTeacher.name : 'Tersedia'}
                     </span>
                   </div>
@@ -528,6 +603,131 @@ export const VotingBallot: React.FC<VotingBallotProps> = ({
           </div>
         </aside>
       </div>
+
+      {/* Illustrated Nomination Picker Dialog */}
+      {activePickerTeacher && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="nomination-picker-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[1px]"
+          onClick={() => setPickerTeacherId(null)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+              <div>
+                <div className="text-xs font-semibold text-blue-800">
+                  Pilih 1 Nominasi Bergambar
+                </div>
+                <h3
+                  id="nomination-picker-title"
+                  className="mt-0.5 text-base font-bold text-slate-900 sm:text-lg"
+                >
+                  {activePickerTeacher.name}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPickerTeacherId(null)}
+                aria-label="Tutup pemilih nominasi"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div className="relative flex-1">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  aria-hidden="true"
+                />
+                <input
+                  type="search"
+                  autoFocus
+                  value={pickerSearch}
+                  onChange={(e) => setPickerSearch(e.target.value)}
+                  placeholder="Cari kategori nominasi (misal: Terberwibawa, Tersabar)..."
+                  aria-label="Cari kategori nominasi"
+                  className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/15"
+                />
+              </div>
+
+              {selections[activePickerTeacher.id] && (
+                <button
+                  type="button"
+                  onClick={() => handlePickNomination('')}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3.5 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50 whitespace-nowrap shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  Batalkan Pilihan Guru Ini
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-y-auto p-5 sm:p-6">
+              {pickerAvailability.length === 0 ? (
+                <div className="py-10 text-center text-sm text-slate-500">
+                  Tidak ada nominasi yang cocok dengan pencarian &ldquo;{pickerSearch}&rdquo;.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {pickerAvailability.map(({ nomination, isAvailable, assignedToTeacherName }) => {
+                    const isSelectedHere = selections[activePickerTeacher.id] === nomination.id;
+                    return (
+                      <button
+                        key={nomination.id}
+                        type="button"
+                        disabled={!isAvailable}
+                        onClick={() => handlePickNomination(nomination.id)}
+                        className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                          isSelectedHere
+                            ? 'border-blue-600 bg-blue-50/70 ring-1 ring-blue-600'
+                            : isAvailable
+                              ? 'border-slate-200 bg-white hover:border-blue-400 hover:bg-slate-50/70'
+                              : 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-55'
+                        }`}
+                      >
+                        <NominationIllustration nominationId={nomination.id} size="lg" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="truncate text-sm font-semibold text-slate-900">
+                              {nomination.label}
+                            </span>
+                            {isSelectedHere && (
+                              <Check className="h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+                            )}
+                          </div>
+                          <div
+                            className={`mt-0.5 truncate text-xs ${
+                              isSelectedHere
+                                ? 'font-medium text-blue-700'
+                                : isAvailable
+                                  ? 'text-emerald-700'
+                                  : 'text-slate-500'
+                            }`}
+                          >
+                            {isSelectedHere
+                              ? 'Dipilih untuk guru ini'
+                              : isAvailable
+                                ? 'Tersedia'
+                                : `Dipilih: ${assignedToTeacherName}`}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

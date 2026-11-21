@@ -4,11 +4,14 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Header, type ActivePage, type RecapTab } from './components/Header';
+import { Header, SCHOOL_LOGO_URL, type ActivePage, type RecapTab } from './components/Header';
 import { RecapDashboard } from './components/RecapDashboard';
+import { SafeImage } from './components/SafeImage';
 import { VoterIdentityCard } from './components/VoterIdentityCard';
 import { VotingBallot } from './components/VotingBallot';
 import type { RecapSummary, SelectionMap } from './shared/constants';
+
+const HERO_AWARDS_IMAGE = '/src/assets/images/hero_teacher_awards_1795245596126.jpg';
 
 interface SubmittedReceipt {
   id: string;
@@ -167,38 +170,94 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {activePage === 'vote' ? (
           <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h1
-                  className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl"
-                  style={{ textWrap: 'balance' }}
-                >
-                  Pemilihan Nominasi Guru
-                </h1>
-                <p className="mt-1 max-w-2xl text-sm text-slate-600">
-                  Pilih 1 nominasi terbaik untuk setiap guru. Setiap nominasi hanya dapat diberikan kepada 1 guru dan hasil langsung terhitung di tabel rekapitulasi.
-                </p>
-              </div>
-              {recap && (
-                <div className="text-xs text-slate-500 sm:text-right">
+            {/* Hero Showcase Split */}
+            <section
+              aria-label="Sambutan Pemilihan Nominasi Guru"
+              className="grid grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white lg:grid-cols-12 lg:items-stretch"
+            >
+              <div className="flex flex-col justify-between gap-5 p-6 sm:p-8 lg:col-span-7">
+                <div>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+                    <SafeImage
+                      src={SCHOOL_LOGO_URL}
+                      alt="Logo OSIS SMPIT Insan Madani 8"
+                      className="h-28 w-28 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-2 shadow-xs sm:h-36 sm:w-36"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-blue-800 sm:text-sm">
+                        OSIS SMPIT Insan Madani 8
+                      </div>
+                      <div className="text-xs text-slate-500 sm:text-sm">
+                        Apresiasi &amp; Pemilihan Nominasi Guru
+                      </div>
+                      <h1
+                        className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl lg:text-4xl"
+                        style={{ textWrap: 'balance' }}
+                      >
+                        Pemilihan Nominasi Guru
+                      </h1>
+                    </div>
+                  </div>
+
+                  <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base">
+                    Berikan apresiasi terbaik untuk guru favorit Anda. Pilih 1 nominasi unik untuk setiap guru dan pantau rekapitulasi suaranya secara langsung.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-xs text-slate-600">
                   <span>
                     <strong className="font-mono tabular-nums font-semibold text-slate-900">
-                      {recap.totalVoters}
+                      27
                     </strong>{' '}
-                    pemilih
+                    Guru
                   </span>
-                  <span className="mx-2 text-slate-300" aria-hidden="true">
+                  <span className="text-slate-300" aria-hidden="true">
                     ·
                   </span>
                   <span>
                     <strong className="font-mono tabular-nums font-semibold text-slate-900">
-                      {recap.totalSelections}
+                      29
                     </strong>{' '}
-                    suara tercatat
+                    Nominasi
                   </span>
+                  <span className="text-slate-300" aria-hidden="true">
+                    ·
+                  </span>
+                  <span>
+                    <strong className="font-mono tabular-nums font-semibold text-slate-900">
+                      14
+                    </strong>{' '}
+                    Kelas (71–95)
+                  </span>
+                  {recap && (
+                    <>
+                      <span className="text-slate-300" aria-hidden="true">
+                        ·
+                      </span>
+                      <span>
+                        <strong className="font-mono tabular-nums font-semibold text-blue-800">
+                          {recap.totalVoters}
+                        </strong>{' '}
+                        pemilih (
+                        <strong className="font-mono tabular-nums font-semibold text-blue-800">
+                          {recap.totalSelections}
+                        </strong>{' '}
+                        suara)
+                      </span>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+
+              <div className="relative min-h-[210px] border-t border-slate-200 bg-slate-100 lg:col-span-5 lg:min-h-full lg:border-l lg:border-t-0">
+                <SafeImage
+                  src={HERO_AWARDS_IMAGE}
+                  alt="Ilustrasi Penghargaan dan Nominasi Guru SMPIT Insan Madani 8"
+                  fallbackLabel="Anugerah Nominasi Guru"
+                  className="h-full w-full object-cover lg:absolute lg:inset-0"
+                />
+              </div>
+            </section>
 
             {!submittedReceipt && (
               <VoterIdentityCard
@@ -236,6 +295,22 @@ export default function App() {
           />
         )}
       </main>
+
+      <footer className="mt-12 border-t border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-5 text-xs text-slate-500 sm:flex-row sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <SafeImage
+              src={SCHOOL_LOGO_URL}
+              alt="Logo OSIS SMPIT Insan Madani 8"
+              className="h-7 w-7 rounded-full border border-slate-200 bg-white object-contain p-0.5"
+            />
+            <span className="font-medium text-slate-700">
+              OSIS SMPIT Insan Madani 8 — Portal Pemilihan Nominasi Guru
+            </span>
+          </div>
+          <span>1 Guru 1 Nominasi · Rekapitulasi Otomatis Real-Time</span>
+        </div>
+      </footer>
     </div>
   );
 }

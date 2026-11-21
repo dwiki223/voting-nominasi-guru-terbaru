@@ -2,7 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { Download, RefreshCw, Search, Trophy } from 'lucide-react';
 import { NOMINATIONS, type RecapSummary } from '../shared/constants';
 import { generateRecapCsv } from '../shared/votingLogic';
-import type { RecapTab } from './Header';
+import { SCHOOL_LOGO_URL, type RecapTab } from './Header';
+import { NominationIllustration } from './NominationIllustration';
+import { SafeImage } from './SafeImage';
+
+const RECAP_TROPHY_IMAGE = '/src/assets/images/illustration_recap_trophy_1795245596491.jpg';
 
 interface RecapDashboardProps {
   recap: RecapSummary | null;
@@ -101,45 +105,63 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Row */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Rekapitulasi Voting Real-Time
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            <span>{isLiveConnected ? 'Sinkronisasi langsung aktif' : 'Mode pembaruan berkala'}</span>
-            <span className="mx-2 text-slate-300" aria-hidden="true">
-              ·
-            </span>
-            <span>
-              Pembaruan:{' '}
-              <span className="font-mono tabular-nums font-medium text-slate-800">
-                {formattedUpdatedAt}
+      {/* Header Showcase Banner */}
+      <section className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <SafeImage
+            src={SCHOOL_LOGO_URL}
+            alt="Logo OSIS SMPIT Insan Madani 8"
+            className="h-20 w-20 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-xs sm:h-24 sm:w-24"
+          />
+          <div>
+            <div className="text-xs font-semibold text-blue-800">
+              OSIS SMPIT Insan Madani 8
+            </div>
+            <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              Rekapitulasi Voting Real-Time
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              <span>{isLiveConnected ? 'Sinkronisasi langsung aktif' : 'Mode pembaruan berkala'}</span>
+              <span className="mx-2 text-slate-300" aria-hidden="true">
+                ·
               </span>
-            </span>
-          </p>
+              <span>
+                Pembaruan:{' '}
+                <span className="font-mono tabular-nums font-medium text-slate-800">
+                  {formattedUpdatedAt}
+                </span>
+              </span>
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0"
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                Muat Ulang
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadCsv}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                Unduh CSV
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0"
-          >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-            Muat Ulang
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadCsv}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0"
-          >
-            <Download className="h-3.5 w-3.5" aria-hidden="true" />
-            Unduh CSV
-          </button>
+        <div className="shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:w-56">
+          <SafeImage
+            src={RECAP_TROPHY_IMAGE}
+            alt="Ilustrasi Rekapitulasi dan Penghargaan Guru"
+            fallbackLabel="Rekapitulasi Real-Time"
+            className="h-36 w-full object-cover"
+          />
         </div>
-      </div>
+      </section>
 
       {/* 4-Column KPI Strip */}
       <section
@@ -329,9 +351,12 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
                     <th
                       key={nom.id}
                       title={nom.label}
-                      className="min-w-[96px] border-r border-slate-100 px-2.5 py-3 text-right font-semibold whitespace-nowrap"
+                      className="min-w-[104px] border-r border-slate-100 px-2.5 py-2.5 text-center font-semibold whitespace-nowrap"
                     >
-                      {nom.shortLabel}
+                      <div className="flex flex-col items-center gap-1">
+                        <NominationIllustration nominationId={nom.id} size="sm" />
+                        <span>{nom.shortLabel}</span>
+                      </div>
                     </th>
                   ))}
                 </tr>
@@ -420,7 +445,10 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
                       {String(idx + 1).padStart(2, '0')}
                     </td>
                     <td className="px-4 py-3 font-semibold text-slate-900">
-                      {row.nomination.label}
+                      <div className="flex items-center gap-3">
+                        <NominationIllustration nominationId={row.nomination.id} size="sm" />
+                        <span>{row.nomination.label}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {row.leaders.length > 0 ? (
@@ -493,11 +521,23 @@ export const RecapDashboard: React.FC<RecapDashboardProps> = ({
                         {row.totalVotes}
                       </td>
                       <td className="px-4 py-3 font-medium text-blue-800">
-                        {row.topNominations.length > 0
-                          ? row.topNominations
-                              .map((t) => `${t.nomination.label} (${t.votes})`)
-                              .join(', ')
-                          : '-'}
+                        {row.topNominations.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {row.topNominations.map((t) => (
+                              <span
+                                key={t.nomination.id}
+                                className="inline-flex items-center gap-1.5"
+                              >
+                                <NominationIllustration nominationId={t.nomination.id} size="sm" />
+                                <span>
+                                  {t.nomination.label} ({t.votes})
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-600">
                         {nonZeroDetails.length > 0
